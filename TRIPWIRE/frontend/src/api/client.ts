@@ -132,6 +132,41 @@ export class TripwireClient {
   }
 
   /**
+   * POST /api/v1/actions/{action_id}/deny
+   * Human denial endpoint — updates database audit event to BLOCK and NOT_EXECUTED.
+   * NEVER invokes tool execution or n8n.
+   */
+  async denyAction(
+    actionId: string,
+    approvedBy: string = 'admin_001'
+  ): Promise<{
+    action_id: string;
+    decision: DecisionType;
+    approved_by: string;
+    execution_status: 'EXECUTED' | 'NOT_EXECUTED';
+  }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/actions/${actionId}/deny`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved_by: approvedBy }),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn('Backend unavailable, simulating denial', e);
+    }
+
+    return {
+      action_id: actionId,
+      decision: 'BLOCK',
+      approved_by: approvedBy,
+      execution_status: 'NOT_EXECUTED',
+    };
+  }
+
+  /**
    * GET /api/v1/sessions/{session_id}/trajectory
    */
   async getTrajectory(sessionId: string): Promise<SessionTrajectory | null> {

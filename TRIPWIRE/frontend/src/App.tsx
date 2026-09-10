@@ -237,7 +237,9 @@ export default function App() {
     if (!pendingConfirmDecision || !pendingConfirmProposal) return;
 
     if (!approve) {
-      // DENY must NEVER call the confirmation endpoint.
+      // DENY: Call backend deny endpoint to persist BLOCK in database and NEVER call n8n
+      await defaultTripwireClient.denyAction(pendingConfirmDecision.action_id, approvedBy);
+
       setAuditEvents((prev) =>
         prev.map((a) =>
           a.action_id === pendingConfirmDecision.action_id
@@ -252,8 +254,19 @@ export default function App() {
             : evt
         )
       );
+      if (pendingConfirmDecision) {
+        sethandledModalActionIds((prev) => new Set([...prev, pendingConfirmDecision.action_id]));
+      }
       setPendingConfirmDecision(null);
       setPendingConfirmProposal(null);
+
+      // Sync with authoritative backend data
+      if (backendOnline) {
+        const audit = await defaultTripwireClient.getAudit(sessionId);
+        if (audit && audit.events) {
+          setAuditEvents(audit.events);
+        }
+      }
       return;
     }
 

@@ -386,3 +386,56 @@ def confirm_action(
             execution_status="NOT_EXECUTED",
         )
 
+
+@router.post("/actions/{action_id}/deny", response_model=ConfirmationResponse)
+def deny_action(
+    action_id: str,
+    request: ConfirmationRequest,
+    db: Session = Depends(get_db),
+) -> ConfirmationResponse:
+    """Explicitly deny an action requiring human confirmation (Phase A10).
+
+    Updates the database audit record:
+    - Sets decision to BLOCK
+    - Sets execution_status to NOT_EXECUTED
+    - Records the approver ID who denied the action
+    - Sets the reason indicating human denial
+    - NEVER invokes ToolExecutionGate, TechFlow gateway, or n8n
+    """
+    clean_action_id = action_id.strip() if action_id else ""
+    if not clean_action_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Action ID cannot be empty",
+        )
+
+    approved_by = request.approved_by.strip()
+    if not approved_by:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="approved_by must be a non-empty string",
+        )
+
+    audit_repo = AuditRepository(db)
+    audit_event = audit_repo.get_by_action_id(clean_action_id)
+    if audit_event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Action '{clean_action_id}' not found",
+        )
+
+    # Update the audit record directly in DB as BLOCKED / NOT_EXECUTED
+    audit_event.decision = Decision.BLOCK.value
+    audit_event.execution_status = "NOT_EXECUTED"
+    audit_event.approved_by = approved_by
+    audit_event.reason = f"Denied by security administrator ({approved_by})"
+    db.commit()
+    db.refresh(audit_event)
+
+    return ConfirmationResponse(
+        action_id=clean_action_id,
+        decision=Decision.BLOCK,
+        approved_by=approved_by,
+        execution_status="NOT_EXECUTED",
+    )
+
