@@ -5,7 +5,7 @@ from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_DB_PATH = BASE_DIR / "tripwire.db"
+DEFAULT_DB_PATH = BASE_DIR / "tripwire_v2.db"
 
 
 class Settings(BaseSettings):

@@ -24,7 +24,7 @@ def get_engine():
         _engine = create_engine(
             settings.database_url,
             echo=False,  # Set to True for SQL query logging during development
-            connect_args={"check_same_thread": False} if settings.database_url.startswith("sqlite") else {},
+            connect_args={"check_same_thread": False, "timeout": 30} if settings.database_url.startswith("sqlite") else {},
         )
     return _engine
 
