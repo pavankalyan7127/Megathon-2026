@@ -1,0 +1,795 @@
+{
+  "name": "TechFlow + Tripwire Security Harness (Lightweight 2-Role Demo)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "d75b39d5-f2b6-4a47-8e63-cf6a956b3893",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -280,
+        576
+      ],
+      "id": "09b8051d-c81d-4319-845a-3b2c1f107a72",
+      "name": "Webhook",
+      "webhookId": "d75b39d5-f2b6-4a47-8e63-cf6a956b3893"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=User: {{ $json.body.user.name }}\nRole: {{ $json.body.user.role }}\nEmail: {{ $json.body.user.email }}\nUser ID: {{ $json.body.user.id }}\nSession: {{ $json.body.session_id }}\n\nRequest:\n{{ $json.body.query }}",
+        "options": {
+          "systemMessage": "=You are the TechFlow company operations AI assistant, secured by the TRIPWIRE Runtime Security Harness.\n\nCRITICAL SECURITY INVARIANT:\nYou MUST ALWAYS evaluate every database operation through the TRIPWIRE_SECURITY_GATEWAY tool BEFORE executing any Google Sheets tool.\n\nEVALUATION STEPS:\n1. When the user asks for a database operation, call TRIPWIRE_SECURITY_GATEWAY with:\n   - principal_id: User's role (e.g. \"{{ $json.body.user.role }}\")\n   - session_id: \"{{ $json.body.session_id }}\"\n   - agent_id: \"techflow_gemini_agent\"\n   - action: the exact tool name (e.g. \"BACKEND_DB_GET\", \"DEVOPS_DB_DELETE\")\n   - resource: the database name (e.g. \"BACKEND_DB\", \"DEVOPS_DB\")\n   - parameters: {}\n2. Inspect Tripwire's response:\n   - If decision is \"ALLOW\": Proceed to invoke the matching Google Sheets tool and return the data.\n   - If decision is \"CONFIRM\" or \"HARD_CONFIRM\": STOP! Do NOT execute the database tool. State that this destructive action is held awaiting administrator confirmation (Risk Band: [risk_band]).\n   - If decision is \"BLOCK\": STOP! Do NOT execute the database tool. State that the action was blocked by Tripwire (Reason: [reason]).\n\nROLE \u2192 DATABASE MAP:\nBackend Developer \u2192 BACKEND_DB\nDevOps Engineer \u2192 DEVOPS_DB\n\nAVAILABLE TOOLS:\n- TRIPWIRE_SECURITY_GATEWAY (Pre-execution security gate)\n- BACKEND_DB_GET, BACKEND_DB_UPDATE, BACKEND_DB_APPEND, BACKEND_DB_DELETE\n- DEVOPS_DB_GET, DEVOPS_DB_UPDATE, DEVOPS_DB_APPEND, DEVOPS_DB_DELETE\n\nAlways report authentic results."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        80,
+        576
+      ],
+      "id": "d871e01b-8513-41ea-b4a2-896825fddea2",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        480,
+        576
+      ],
+      "id": "998fd76e-7365-4020-b108-b16a5c13753e",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "modelName": {
+          "__rl": true,
+          "value": "models/gemini-1.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-1.5-flash"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -100,
+        780
+      ],
+      "id": "f134ee18-c428-4c32-8c3c-5db89b1cbd59",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "8hxustbiJBXww4Dz",
+          "name": "Google Gemini(PaLM) Api account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "TRIPWIRE_SECURITY_GATEWAY",
+        "description": "Evaluates user authorization, action reversibility, and behavioral trajectory risk with Tripwire BEFORE executing any Google Sheets database operation. Returns decision: ALLOW, CONFIRM, or BLOCK.",
+        "url": "http://localhost:8000/api/v1/actions/propose",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"principal_id\": \"{{ $fromAI('principal_id', 'The user role, e.g. Backend Developer or DevOps Engineer') }}\",\n  \"session_id\": \"{{ $fromAI('session_id', 'The session identifier') }}\",\n  \"agent_id\": \"techflow_gemini_agent\",\n  \"action\": \"{{ $fromAI('action', 'The tool name to propose, e.g. BACKEND_DB_GET, DEVOPS_DB_DELETE') }}\",\n  \"resource\": \"{{ $fromAI('resource', 'The database resource, e.g. BACKEND_DB, DEVOPS_DB') }}\",\n  \"parameters\": {}\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        450,
+        800
+      ],
+      "id": "c01e5482-96db-4e1b-bb32-7c9891008d51",
+      "name": "TRIPWIRE_SECURITY_GATEWAY"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Read ALL rows from BACKEND_DB. Use this to view/search records and to find row_number before deleting a record by customer_id.",
+        "documentId": {
+          "__rl": true,
+          "value": "1Y-roxIcD21UvWYYHZ9MwivpnUkilKSoQORh7LOampro",
+          "mode": "list",
+          "cachedResultName": "BACKEND_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Y-roxIcD21UvWYYHZ9MwivpnUkilKSoQORh7LOampro/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Y-roxIcD21UvWYYHZ9MwivpnUkilKSoQORh7LOampro/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        928,
+        1200
+      ],
+      "id": "029c8937-8c15-46bc-b56f-a1326ca881f6",
+      "name": "BACKEND_DB_GET",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kiMMBI7DzZZPN2tU",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Update an existing BACKEND_DB record. Match using customer_id. Only change fields explicitly requested by the user; never overwrite unrelated fields.",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1Y-roxIcD21UvWYYHZ9MwivpnUkilKSoQORh7LOampro",
+          "mode": "list",
+          "cachedResultName": "BACKEND_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Y-roxIcD21UvWYYHZ9MwivpnUkilKSoQORh7LOampro/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Y-roxIcD21UvWYYHZ9MwivpnUkilKSoQORh7LOampro/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "customer_id": "={{ $fromAI('customer_id', `Existing record customer_id to match.`, 'string') }}",
+            "name": "={{ $fromAI('name', `New value for name. Only provide this if the user explicitly asked to change name.`, 'string') }}",
+            "email": "={{ $fromAI('email', `New value for email. Only provide this if the user explicitly asked to change email.`, 'string') }}",
+            "company": "={{ $fromAI('company', `New value for company. Only provide this if the user explicitly asked to change company.`, 'string') }}",
+            "status": "={{ $fromAI('status', `New value for status. Only provide this if the user explicitly asked to change status.`, 'string') }}"
+          },
+          "matchingColumns": [
+            "customer_id"
+          ],
+          "schema": [
+            {
+              "id": "customer_id",
+              "displayName": "customer_id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1232,
+        1200
+      ],
+      "id": "cd577dc1-8d3f-425a-89ec-ee8bf06be174",
+      "name": "BACKEND_DB_UPDATE",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kiMMBI7DzZZPN2tU",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Append a new BACKEND_DB record. Provide only fields the user explicitly supplied; never invent missing values.",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Y-roxIcD21UvWYYHZ9MwivpnUkilKSoQORh7LOampro",
+          "mode": "list",
+          "cachedResultName": "BACKEND_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Y-roxIcD21UvWYYHZ9MwivpnUkilKSoQORh7LOampro/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Y-roxIcD21UvWYYHZ9MwivpnUkilKSoQORh7LOampro/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "customer_id": "={{ $fromAI('customer_id', `Value for customer_id. Do not invent it.`, 'string') }}",
+            "name": "={{ $fromAI('name', `Value for name. Do not invent it.`, 'string') }}",
+            "email": "={{ $fromAI('email', `Value for email. Do not invent it.`, 'string') }}",
+            "company": "={{ $fromAI('company', `Value for company. Do not invent it.`, 'string') }}",
+            "status": "={{ $fromAI('status', `Value for status. Do not invent it.`, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "customer_id",
+              "displayName": "customer_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1536,
+        1200
+      ],
+      "id": "8ec4d4d8-46da-4b33-851e-7439669b5b2f",
+      "name": "BACKEND_DB_APPEND",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kiMMBI7DzZZPN2tU",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Delete exactly one row from BACKEND_DB. IMPORTANT: first use BACKEND_DB_GET, find the row whose customer_id matches the user's requested ID, then pass that row's exact row_number here. Never guess a row number.",
+        "operation": "delete",
+        "documentId": {
+          "__rl": true,
+          "value": "1Y-roxIcD21UvWYYHZ9MwivpnUkilKSoQORh7LOampro",
+          "mode": "list",
+          "cachedResultName": "BACKEND_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Y-roxIcD21UvWYYHZ9MwivpnUkilKSoQORh7LOampro/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Y-roxIcD21UvWYYHZ9MwivpnUkilKSoQORh7LOampro/edit#gid=0"
+        },
+        "startIndex": "={{ $fromAI('row_number', `The exact spreadsheet row_number returned by the matching BACKEND_DB GET tool. Never guess this.`, 'number') }}"
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1840,
+        1200
+      ],
+      "id": "6372cbf4-9f63-49cd-a96a-013f9199ce08",
+      "name": "BACKEND_DB_DELETE",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kiMMBI7DzZZPN2tU",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Read ALL rows from DEVOPS_DB. Use this to view/search records and to find row_number before deleting a record by server_id.",
+        "documentId": {
+          "__rl": true,
+          "value": "1BGv5sOWHuwT7YEJLAAbw9qiVCzM4HmleJpk-tc-idnU",
+          "mode": "list",
+          "cachedResultName": "DEVOPS_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1BGv5sOWHuwT7YEJLAAbw9qiVCzM4HmleJpk-tc-idnU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1BGv5sOWHuwT7YEJLAAbw9qiVCzM4HmleJpk-tc-idnU/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        928,
+        1500
+      ],
+      "id": "c3cb1b43-9c57-4381-b3d9-83a429e04f41",
+      "name": "DEVOPS_DB_GET",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kiMMBI7DzZZPN2tU",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Update an existing DEVOPS_DB record. Match using server_id. Only change fields explicitly requested by the user; never overwrite unrelated fields.",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1BGv5sOWHuwT7YEJLAAbw9qiVCzM4HmleJpk-tc-idnU",
+          "mode": "list",
+          "cachedResultName": "DEVOPS_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1BGv5sOWHuwT7YEJLAAbw9qiVCzM4HmleJpk-tc-idnU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1BGv5sOWHuwT7YEJLAAbw9qiVCzM4HmleJpk-tc-idnU/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "server_id": "={{ $fromAI('server_id', `Existing record server_id to match.`, 'string') }}",
+            "server_name": "={{ $fromAI('server_name', `New value for server_name. Only provide this if the user explicitly asked to change server_name.`, 'string') }}",
+            "environment": "={{ $fromAI('environment', `New value for environment. Only provide this if the user explicitly asked to change environment.`, 'string') }}",
+            "ip_address": "={{ $fromAI('ip_address', `New value for ip_address. Only provide this if the user explicitly asked to change ip_address.`, 'string') }}",
+            "status": "={{ $fromAI('status', `New value for status. Only provide this if the user explicitly asked to change status.`, 'string') }}"
+          },
+          "matchingColumns": [
+            "server_id"
+          ],
+          "schema": [
+            {
+              "id": "server_id",
+              "displayName": "server_id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "server_name",
+              "displayName": "server_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "environment",
+              "displayName": "environment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ip_address",
+              "displayName": "ip_address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1232,
+        1500
+      ],
+      "id": "f41e4ee5-a49e-4f3e-9c0b-86db5d4e7c80",
+      "name": "DEVOPS_DB_UPDATE",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kiMMBI7DzZZPN2tU",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Append a new DEVOPS_DB record. Provide only fields the user explicitly supplied; never invent missing values.",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1BGv5sOWHuwT7YEJLAAbw9qiVCzM4HmleJpk-tc-idnU",
+          "mode": "list",
+          "cachedResultName": "DEVOPS_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1BGv5sOWHuwT7YEJLAAbw9qiVCzM4HmleJpk-tc-idnU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1BGv5sOWHuwT7YEJLAAbw9qiVCzM4HmleJpk-tc-idnU/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "server_id": "={{ $fromAI('server_id', `Value for server_id. Do not invent it.`, 'string') }}",
+            "server_name": "={{ $fromAI('server_name', `Value for server_name. Do not invent it.`, 'string') }}",
+            "environment": "={{ $fromAI('environment', `Value for environment. Do not invent it.`, 'string') }}",
+            "ip_address": "={{ $fromAI('ip_address', `Value for ip_address. Do not invent it.`, 'string') }}",
+            "status": "={{ $fromAI('status', `Value for status. Do not invent it.`, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "server_id",
+              "displayName": "server_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "server_name",
+              "displayName": "server_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "environment",
+              "displayName": "environment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ip_address",
+              "displayName": "ip_address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1536,
+        1500
+      ],
+      "id": "fba12c58-1304-415c-a465-74c90b6d0a0e",
+      "name": "DEVOPS_DB_APPEND",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kiMMBI7DzZZPN2tU",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Delete exactly one row from DEVOPS_DB. IMPORTANT: first use DEVOPS_DB_GET, find the row whose server_id matches the user's requested ID, then pass that row's exact row_number here. Never guess a row number.",
+        "operation": "delete",
+        "documentId": {
+          "__rl": true,
+          "value": "1BGv5sOWHuwT7YEJLAAbw9qiVCzM4HmleJpk-tc-idnU",
+          "mode": "list",
+          "cachedResultName": "DEVOPS_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1BGv5sOWHuwT7YEJLAAbw9qiVCzM4HmleJpk-tc-idnU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1BGv5sOWHuwT7YEJLAAbw9qiVCzM4HmleJpk-tc-idnU/edit#gid=0"
+        },
+        "startIndex": "={{ $fromAI('row_number', `The exact spreadsheet row_number returned by the matching DEVOPS_DB GET tool. Never guess this.`, 'number') }}"
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1840,
+        1500
+      ],
+      "id": "04948a0e-4254-4005-b6a4-209154bbe945",
+      "name": "DEVOPS_DB_DELETE",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "kiMMBI7DzZZPN2tU",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TRIPWIRE_SECURITY_GATEWAY": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BACKEND_DB_GET": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BACKEND_DB_UPDATE": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BACKEND_DB_APPEND": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BACKEND_DB_DELETE": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DEVOPS_DB_GET": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DEVOPS_DB_UPDATE": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DEVOPS_DB_APPEND": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DEVOPS_DB_DELETE": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "b1f893e1-4c12-4cf0-8cf9-798b31a3994e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2a90f316eb43a81185a9ba8ed3ffa230fb4e3073f20e800e839b07b5701603d7"
+  },
+  "nodeGroups": [],
+  "id": "8HIPIHMeHeYbU0pb",
+  "tags": []
+}

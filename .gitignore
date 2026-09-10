@@ -1,0 +1,89 @@
+﻿# ==========================================
+# MEGATHON 26 - Monorepo .gitignore
+# Covers TECHFLOW, TRIPWIRE, Node.js, Python, Vite
+# ==========================================
+
+# Dependencies
+node_modules/
+*/node_modules/
+*/*/node_modules/
+
+# Python / Virtual Environments
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+
+# Build Artifacts & Frontend Output
+dist/
+*/dist/
+*/*/dist/
+build/
+*.tsbuildinfo
+.eslintcache
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*/.env
+*/*/.env
+
+# Databases & Local State
+*.sqlite3
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+tripwire.db
+*/tripwire.db
+*/*/tripwire.db
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+
+# Editor & OS Artifacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
