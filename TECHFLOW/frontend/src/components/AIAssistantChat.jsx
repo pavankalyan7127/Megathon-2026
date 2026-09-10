@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useSession } from '../context/SessionContext';
 import { sendAgentQuery } from '../services/api';
 import FormattedMessage from './FormattedMessage';
 import { 
@@ -9,16 +10,19 @@ import {
   RotateCcw, 
   AlertCircle, 
   Clock, 
-  Info,
-  CheckCircle2
+  Info, 
+  CheckCircle2,
+  Plus
 } from 'lucide-react';
 
 export default function AIAssistantChat({ samplePrompts = [], defaultInput = '', onInputConsumed }) {
   const { user } = useAuth();
+  const { activeSession, updateSessionMessages, createNewSession } = useSession();
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState([]);
   const messagesEndRef = useRef(null);
+
+  const messages = activeSession?.messages || [];
 
   // Sync defaultInput if triggered from quick action card
   useEffect(() => {
@@ -38,7 +42,7 @@ export default function AIAssistantChat({ samplePrompts = [], defaultInput = '',
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
-    if (!query.trim() || loading) return;
+    if (!query.trim() || loading || !activeSession) return;
 
     const currentQuery = query.trim();
     setQuery('');
@@ -52,7 +56,8 @@ export default function AIAssistantChat({ samplePrompts = [], defaultInput = '',
       userName: user?.name
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const newMessagesList = [...messages, userMessage];
+    updateSessionMessages(activeSession.id, newMessagesList);
     setLoading(true);
 
     try {
@@ -64,7 +69,7 @@ export default function AIAssistantChat({ samplePrompts = [], defaultInput = '',
           role: user.role
         },
         query: currentQuery,
-        sessionId: `sess_${user.id}_demo`
+        sessionId: activeSession.id
       });
 
       let botMessageText = '';
@@ -112,7 +117,7 @@ export default function AIAssistantChat({ samplePrompts = [], defaultInput = '',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
 
-      setMessages((prev) => [...prev, botMessage]);
+      updateSessionMessages(activeSession.id, [...newMessagesList, botMessage]);
     } catch (err) {
       const errorMessage = {
         id: `err_${Date.now()}`,
@@ -121,14 +126,16 @@ export default function AIAssistantChat({ samplePrompts = [], defaultInput = '',
         status: 'error',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
-      setMessages((prev) => [...prev, errorMessage]);
+      updateSessionMessages(activeSession.id, [...newMessagesList, errorMessage]);
     } finally {
       setLoading(false);
     }
   };
 
   const handleClearChat = () => {
-    setMessages([]);
+    if (activeSession) {
+      updateSessionMessages(activeSession.id, []);
+    }
   };
 
   return (

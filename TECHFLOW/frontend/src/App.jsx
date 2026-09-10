@@ -27,10 +27,14 @@ function AppContent() {
   return <LoginPage onNavigateToSignup={() => setAuthMode('signup')} />;
 }
 
+import { SessionProvider } from './context/SessionContext';
+
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <SessionProvider>
+        <AppContent />
+      </SessionProvider>
     </AuthProvider>
   );
 }

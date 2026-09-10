@@ -32,10 +32,12 @@ function extractActionProposal(user, query) {
     }
   }
 
-  // Extract simple parameters if present
-  const params = {};
+  // Extract parameters
+  const params = { original_query: query };
   const idMatch = query.match(/C\d+/i);
   if (idMatch) params.customer_id = idMatch[0].toUpperCase();
+  const srvMatch = query.match(/SRV[-\d]+/i);
+  if (srvMatch) params.server_id = srvMatch[0].toUpperCase();
   const nameMatch = query.match(/to\s+([A-Za-z\s]+)/i);
   if (nameMatch) params.name = nameMatch[1].trim();
 
@@ -195,20 +197,46 @@ export async function executeConfirmedAction({ action_id, proposal, approved_by 
     return { success: false, message: 'n8n Webhook URL is not configured' };
   }
 
+  const originalQuery = proposal?.parameters?.original_query || '';
+  const actionName = proposal?.action || 'database action';
+  const resourceName = proposal?.resource || 'database';
+
+  let targetedInstruction = '';
+  if (proposal?.parameters?.customer_id) {
+    targetedInstruction = `Delete the customer record with customer_id ${proposal.parameters.customer_id} from ${resourceName}.`;
+  } else if (proposal?.parameters?.server_id) {
+    targetedInstruction = `Delete the server record with server_id ${proposal.parameters.server_id} from ${resourceName}.`;
+  } else if (originalQuery) {
+    targetedInstruction = originalQuery;
+  } else {
+    targetedInstruction = `Execute ${actionName} on ${resourceName}.`;
+  }
+
   const payload = {
     user: {
       id: 'admin',
       name: approved_by || 'Security Administrator',
       email: 'admin@techflow.com',
-      role: proposal?.principal_id || 'Backend Developer'
+      role: proposal?.principal_id || 'DevOps Engineer'
     },
-    query: `Execute confirmed ${proposal?.action || 'action'} for target ${proposal?.resource || 'database'}: ${JSON.stringify(proposal?.parameters || {})}`,
+    query: `[ADMIN PRE-APPROVED EXECUTION] ${targetedInstruction}`,
     source: 'tripwire-hitl-approval',
     approved_by: approved_by || 'Security Administrator',
     timestamp: new Date().toISOString(),
     session_id: proposal?.session_id || 'sess_1_demo',
     is_pre_approved: true
   };
+
+  console.log('\n======================================================================');
+  console.log('⚡ [ADMIN HITL APPROVED] Dispatching execution to n8n Webhook');
+  console.log('📋 Action ID:', action_id);
+  console.log('👤 Approved By:', approved_by);
+  console.log('🎯 Proposal Action:', proposal?.action);
+  console.log('📦 Proposal Resource:', proposal?.resource);
+  console.log('🔍 Proposal Parameters:', JSON.stringify(proposal?.parameters, null, 2));
+  console.log('🌐 n8n Webhook Target URL:', webhookUrl);
+  console.log('📤 Final Dispatch Payload:\n', JSON.stringify(payload, null, 2));
+  console.log('======================================================================\n');
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), config.n8nTimeoutMs);
@@ -225,6 +253,8 @@ export async function executeConfirmedAction({ action_id, proposal, approved_by 
     });
     clearTimeout(timeoutId);
 
+    console.log(`📥 [n8n RESPONSE] Status: ${res.status} ${res.statusText}`);
+
     const contentType = res.headers.get('content-type') || '';
     let data;
     if (contentType.includes('application/json')) {
@@ -232,9 +262,13 @@ export async function executeConfirmedAction({ action_id, proposal, approved_by 
     } else {
       data = { response: await res.text() };
     }
+    console.log('📄 [n8n RESPONSE DATA]:\n', JSON.stringify(data, null, 2));
+    console.log('======================================================================\n');
     return { success: true, data };
   } catch (err) {
     clearTimeout(timeoutId);
+    console.error('❌ [n8n DISPATCH ERROR]:', err.message);
+    console.log('======================================================================\n');
     return { success: false, error: err.message };
   }
 }

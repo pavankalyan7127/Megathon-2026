@@ -34,8 +34,10 @@ export default function App() {
   >('dashboard');
   const [backendOnline, setBackendOnline] = useState<boolean>(false);
 
-  // Runtime State
+  // Runtime State & Session Management
   const [sessionId, setSessionId] = useState<string>('sess_1_demo');
+  const [availableSessions, setAvailableSessions] = useState<Array<{ session_id: string; principal_id?: string }>>([]);
+  const [autoSyncSession, setAutoSyncSession] = useState<boolean>(true);
   const [principalId, setPrincipalId] = useState<string>('Backend Developer');
   const [currentScore, setCurrentScore] = useState<number>(0.0);
   const [currentRiskBand, setCurrentRiskBand] = useState<RiskBandType>('LOW');
@@ -62,7 +64,28 @@ export default function App() {
       setBackendOnline(res.backendOnline);
 
       if (res.backendOnline) {
-        const targetSession = sessionId || 'sess_1_demo';
+        // 1. Fetch available sessions from FastAPI
+        let currentTargetSession = sessionId;
+        try {
+          const sessList = await defaultTripwireClient.listSessions();
+          if (sessList && sessList.length > 0) {
+            setAvailableSessions(sessList.map((s) => ({ session_id: s.session_id, principal_id: s.principal_id })));
+            if (autoSyncSession) {
+              const latestId = sessList[0].session_id;
+              if (latestId && latestId !== sessionId) {
+                currentTargetSession = latestId;
+                setSessionId(latestId);
+              }
+            } else if (!sessList.some((s) => s.session_id === sessionId)) {
+              currentTargetSession = sessList[0].session_id;
+              setSessionId(currentTargetSession);
+            }
+          }
+        } catch (sessErr) {
+          console.warn('Failed to fetch session list:', sessErr);
+        }
+
+        const targetSession = currentTargetSession || 'sess_1_demo';
         const audit = await defaultTripwireClient.getAudit(targetSession);
         if (audit && audit.events && audit.events.length > 0) {
           setAuditEvents(audit.events);
@@ -114,7 +137,7 @@ export default function App() {
     sync();
     const interval = setInterval(sync, 2500);
     return () => clearInterval(interval);
-  }, [sessionId, isConfirmModalOpen, handledModalActionIds]);
+  }, [sessionId, autoSyncSession, isConfirmModalOpen, handledModalActionIds]);
 
   const handleReset = (initialScore: number = 0.0) => {
     TripwireClient.resetSimState(initialScore);
@@ -255,7 +278,13 @@ export default function App() {
 
       // Trigger actual execution on TechFlow/n8n database layer
       try {
-        await fetch('http://localhost:4000/api/agent/execute-confirmed', {
+        console.log('🛡️ [TRIPWIRE FRONTEND] Admin Approved Action:', {
+          action_id: pendingConfirmDecision.action_id,
+          proposal: pendingConfirmProposal,
+          approved_by: approvedBy
+        });
+
+        const execRes = await fetch('http://localhost:4000/api/agent/execute-confirmed', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -264,8 +293,11 @@ export default function App() {
             approved_by: approvedBy
           })
         });
+
+        const execData = await execRes.json();
+        console.log('🛡️ [TRIPWIRE FRONTEND] TechFlow Gateway Response:', execData);
       } catch (execErr) {
-        console.warn('Failed to forward confirmed execution to TechFlow backend:', execErr);
+        console.warn('❌ Failed to forward confirmed execution to TechFlow backend:', execErr);
       }
     } else {
       setAuditEvents((prev) =>
@@ -317,7 +349,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Indicators */}
+        {/* Indicators & Session Selector */}
         <div className="flex items-center space-x-3 text-xs">
           <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">
             <span className={`w-2 h-2 rounded-full ${backendOnline ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`}></span>
@@ -326,9 +358,38 @@ export default function App() {
               {backendOnline ? 'FastAPI Connected' : 'Simulated Harness'}
             </span>
           </div>
+
           <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">
             <span className="text-slate-400">Active Session:</span>
-            <span className="font-mono text-indigo-300 font-bold">{sessionId}</span>
+            {availableSessions.length > 0 ? (
+              <select
+                value={sessionId}
+                onChange={(e) => {
+                  setSessionId(e.target.value);
+                  setAutoSyncSession(false);
+                }}
+                className="bg-slate-950 text-indigo-300 font-mono font-bold text-xs border border-indigo-900/60 rounded px-2 py-0.5 focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                {availableSessions.map((s) => (
+                  <option key={s.session_id} value={s.session_id} className="bg-slate-900 text-slate-200">
+                    {s.session_id} {s.principal_id ? `(${s.principal_id})` : ''}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="font-mono text-indigo-300 font-bold">{sessionId}</span>
+            )}
+            <button
+              onClick={() => setAutoSyncSession((prev) => !prev)}
+              title={autoSyncSession ? 'Click to lock to current session' : 'Click to enable live auto-sync to newest session'}
+              className={`ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded border transition ${
+                autoSyncSession
+                  ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60 animate-pulse'
+                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+              }`}
+            >
+              {autoSyncSession ? '⚡ LIVE AUTO-SYNC' : 'MANUAL'}
+            </button>
           </div>
         </div>
       </header>

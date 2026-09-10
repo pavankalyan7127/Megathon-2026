@@ -162,6 +162,27 @@ export class TripwireClient {
   }
 
   /**
+   * GET /api/v1/sessions
+   */
+  async listSessions(): Promise<Array<{
+    session_id: string;
+    principal_id: string;
+    agent_id: string;
+    trajectory_score: number;
+    risk_band: RiskBandType;
+  }>> {
+    try {
+      const res = await fetch(`${this.baseUrl}/sessions`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn('Backend listSessions fetch error', e);
+    }
+    return [];
+  }
+
+  /**
    * Contract-accurate local simulator adhering to Frozen Decision Matrix and EMA formula
    */
   private static simScore: number = 0.0;

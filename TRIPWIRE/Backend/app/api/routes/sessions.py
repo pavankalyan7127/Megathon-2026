@@ -67,3 +67,27 @@ def create_session(
         trajectory_score=trajectory_score,
         risk_band=risk_band,
     )
+
+
+@router.get("/sessions", response_model=list[SessionCreateResponse])
+def list_sessions(
+    db: Session = Depends(get_db),
+) -> list[SessionCreateResponse]:
+    """List all registered agent sessions in Tripwire."""
+    session_repo = SessionRepository(db)
+    sessions = session_repo.get_all() if hasattr(session_repo, 'get_all') else db.query(session_repo.db_model if hasattr(session_repo, 'db_model') else None).all() if False else []
+    
+    from app.db.models import SessionModel
+    sessions = db.query(SessionModel).order_by(SessionModel.started_at.desc()).all()
+    
+    return [
+        SessionCreateResponse(
+            session_id=s.id,
+            principal_id=s.principal_id,
+            agent_id=s.agent_id,
+            trajectory_score=s.trajectory_score,
+            risk_band=classify_risk_band(s.trajectory_score),
+        )
+        for s in sessions
+    ]
+

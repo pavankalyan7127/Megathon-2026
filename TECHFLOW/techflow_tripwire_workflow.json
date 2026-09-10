@@ -23,7 +23,8 @@
         "promptType": "define",
         "text": "=User: {{ $json.body.user.name }}\nRole: {{ $json.body.user.role }}\nEmail: {{ $json.body.user.email }}\nUser ID: {{ $json.body.user.id }}\nSession: {{ $json.body.session_id }}\n\nRequest:\n{{ $json.body.query }}",
         "options": {
-          "systemMessage": "=You are the TechFlow company operations AI assistant, secured by the TRIPWIRE Runtime Security Harness.\n\nCRITICAL SECURITY INVARIANT:\nYou MUST ALWAYS evaluate every database operation through the TRIPWIRE_SECURITY_GATEWAY tool BEFORE executing any Google Sheets tool.\n\nEVALUATION STEPS:\n1. When the user asks for a database operation, call TRIPWIRE_SECURITY_GATEWAY with:\n   - principal_id: User's role (e.g. \"{{ $json.body.user.role }}\")\n   - session_id: \"{{ $json.body.session_id }}\"\n   - agent_id: \"techflow_gemini_agent\"\n   - action: the exact tool name (e.g. \"BACKEND_DB_GET\", \"DEVOPS_DB_DELETE\")\n   - resource: the database name (e.g. \"BACKEND_DB\", \"DEVOPS_DB\")\n   - parameters: {}\n2. Inspect Tripwire's response:\n   - If decision is \"ALLOW\": Proceed to invoke the matching Google Sheets tool and return the data.\n   - If decision is \"CONFIRM\" or \"HARD_CONFIRM\": STOP! Do NOT execute the database tool. State that this destructive action is held awaiting administrator confirmation (Risk Band: [risk_band]).\n   - If decision is \"BLOCK\": STOP! Do NOT execute the database tool. State that the action was blocked by Tripwire (Reason: [reason]).\n\nROLE \u2192 DATABASE MAP:\nBackend Developer \u2192 BACKEND_DB\nDevOps Engineer \u2192 DEVOPS_DB\n\nAVAILABLE TOOLS:\n- TRIPWIRE_SECURITY_GATEWAY (Pre-execution security gate)\n- BACKEND_DB_GET, BACKEND_DB_UPDATE, BACKEND_DB_APPEND, BACKEND_DB_DELETE\n- DEVOPS_DB_GET, DEVOPS_DB_UPDATE, DEVOPS_DB_APPEND, DEVOPS_DB_DELETE\n\nAlways report authentic results."
+          "maxIterations": 10,
+          "systemMessage": "=You are the TechFlow company operations AI assistant, secured by the TRIPWIRE Runtime Security Harness.\n\nMANDATORY 2-STEP WORKFLOW FOR DELETING RECORDS:\nWhen asked to delete a record by ID (such as server_id or customer_id):\n1. FIRST tool to call: Invoke the GET tool (DEVOPS_DB_GET or BACKEND_DB_GET) to inspect the table and find the row matching the target ID.\n2. In Google Sheets, each row has a 1-based line number (the 1st row in the sheet is 1, the 2nd row is 2, the 3rd row is 3, etc.). Find the line number of the matching record (e.g. S001 is row 1, S002 is row 2, S003 is row 3).\n3. SECOND tool to call: Immediately invoke the DELETE tool (DEVOPS_DB_DELETE or BACKEND_DB_DELETE) with {\"row_number\": <row_number>}, passing that exact small integer (e.g. 2 for row 2).\nNEVER pass dummy numbers like 123. Always use the real spreadsheet row index.\n\nSPECIAL EXCEPTION FOR ADMIN PRE-APPROVED ACTIONS:\nIf the Request begins with \"[ADMIN PRE-APPROVED EXECUTION\" or indicates pre-approval, this action has ALREADY been validated and approved by the Tripwire Human Administrator. In this case, DO NOT call TRIPWIRE_SECURITY_GATEWAY. Proceed directly with the database tools (first GET to find row_number, then DELETE/UPDATE/APPEND).\n\nCRITICAL SECURITY INVARIANT FOR STANDARD USER REQUESTS:\nFor all standard user requests, you MUST ALWAYS evaluate every database operation through the TRIPWIRE_SECURITY_GATEWAY tool BEFORE executing any Google Sheets tool.\n\nROLE \u2192 DATABASE MAP:\nBackend Developer \u2192 BACKEND_DB\nDevOps Engineer \u2192 DEVOPS_DB\n\nAVAILABLE TOOLS:\n- TRIPWIRE_SECURITY_GATEWAY (Pre-execution security gate)\n- BACKEND_DB_GET, BACKEND_DB_UPDATE, BACKEND_DB_APPEND, BACKEND_DB_DELETE\n- DEVOPS_DB_GET, DEVOPS_DB_UPDATE, DEVOPS_DB_APPEND, DEVOPS_DB_DELETE\n\nAlways report authentic results."
         }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
@@ -350,7 +351,7 @@
           "cachedResultName": "Sheet1",
           "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Y-roxIcD21UvWYYHZ9MwivpnUkilKSoQORh7LOampro/edit#gid=0"
         },
-        "startIndex": "={{ $fromAI('row_number', `The exact spreadsheet row_number returned by the matching BACKEND_DB GET tool. Never guess this.`, 'number') }}"
+        "startIndex": "={{ $fromAI('row_number', `The 1-based spreadsheet row number (e.g. 1, 2, 3) to delete.`, 'number') }}"
       },
       "type": "n8n-nodes-base.googleSheetsTool",
       "typeVersion": 4.7,
@@ -625,7 +626,7 @@
           "cachedResultName": "Sheet1",
           "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1BGv5sOWHuwT7YEJLAAbw9qiVCzM4HmleJpk-tc-idnU/edit#gid=0"
         },
-        "startIndex": "={{ $fromAI('row_number', `The exact spreadsheet row_number returned by the matching DEVOPS_DB GET tool. Never guess this.`, 'number') }}"
+        "startIndex": "={{ $fromAI('row_number', `The 1-based spreadsheet row number (e.g. 1, 2, 3) to delete.`, 'number') }}"
       },
       "type": "n8n-nodes-base.googleSheetsTool",
       "typeVersion": 4.7,
