@@ -1,7 +1,25 @@
 import { config } from '../config/index.js';
 
 /**
- * Determine action and resource from query
+ * Split a complex compound query into discrete sequential sub-steps
+ * e.g., "first update customer 7 to 'captain' and then add random data and then delete row 4"
+ */
+function parseSequentialSteps(query) {
+  if (!query || typeof query !== 'string') return [query];
+
+  const cleaned = query.trim();
+  
+  // Split on delimiters like: "and then", "then", "after that", "next,", "next", or semicolons/newlines
+  const rawParts = cleaned.split(/\s+(?:and\s+then|then|after\s+that|next)\s+|;\s*|\n+/i);
+  const steps = rawParts
+    .map(p => p.replace(/^(?:first|1\.|2\.|3\.|4\.|5\.|and\s+)\s*/i, '').trim())
+    .filter(p => p.length > 0);
+
+  return steps.length > 0 ? steps : [cleaned];
+}
+
+/**
+ * Determine action, resource, and parameters for an individual step or query
  */
 function extractActionProposal(user, query) {
   const q = query.toLowerCase();
@@ -45,92 +63,63 @@ function extractActionProposal(user, query) {
 }
 
 /**
- * Forward user natural-language query and role context to n8n webhook with Tripwire security evaluation
+ * Helper to evaluate a proposal against Tripwire
  */
-export async function forwardToN8N({ user, query, sessionId }) {
-  const currentSessionId = sessionId || 'sess_1_demo';
-  const proposal = extractActionProposal(user, query);
-
-  // 1. Mandatory Tripwire Security Harness Evaluation
-  let tripwireDecision = null;
-  const proposalPayload = {
-    principal_id: user?.role || 'Backend Developer',
-    session_id: currentSessionId,
-    agent_id: 'techflow_gemini_agent',
-    action: proposal.action,
-    resource: proposal.resource,
-    parameters: proposal.parameters
-  };
-
+async function evaluateWithTripwire(proposalPayload) {
   console.log('\n======================================================');
-  console.log('🚀 [TECHFLOW -> TRIPWIRE] Forwarding proposal to security harness:');
-  console.log('🔗 URL: POST http://localhost:8000/api/v1/actions/propose');
+  console.log('🚀 [TECHFLOW -> TRIPWIRE] Proposing action to security harness:');
+  console.log('🔗 URL: POST http://127.0.0.1:8000/api/v1/actions/propose');
   console.log('📦 Proposal:', JSON.stringify(proposalPayload, null, 2));
   console.log('======================================================\n');
 
   try {
-    const twRes = await fetch('http://localhost:8000/api/v1/actions/propose', {
+    const twRes = await fetch('http://127.0.0.1:8000/api/v1/actions/propose', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(proposalPayload)
     });
     if (twRes.ok) {
-      tripwireDecision = await twRes.json();
+      const decision = await twRes.json();
       console.log('🛡️ [TRIPWIRE -> TECHFLOW] Decision received:');
-      console.log(JSON.stringify(tripwireDecision, null, 2));
+      console.log(JSON.stringify(decision, null, 2));
       console.log('======================================================\n');
+      return decision;
     } else {
       console.error(`⚠️ [TRIPWIRE ERROR] HTTP ${twRes.status}: ${twRes.statusText}`);
     }
   } catch (twErr) {
     console.warn('❌ [TRIPWIRE UNREACHABLE] Could not connect to Tripwire on port 8000:', twErr.message);
   }
+  return null;
+}
 
-  // If Tripwire intercepted with BLOCK or CONFIRM
-  if (tripwireDecision) {
-    if (tripwireDecision.decision === 'BLOCK') {
-      console.log('⛔ [INTERCEPTED] Tripwire BLOCKED execution. Stopping workflow.');
-      return {
-        success: true,
-        status: 'tripwire_blocked',
-        data: `⛔ **Tripwire Security Harness: Action BLOCKED**\n- **Reason**: ${tripwireDecision.reason}\n- **Principal**: ${user?.role}\n- **Action**: ${proposal.action}\n- **Trajectory Risk**: ${tripwireDecision.risk_band} (${tripwireDecision.trajectory_score})`
-      };
-    }
-    if (tripwireDecision.decision === 'CONFIRM' || tripwireDecision.decision === 'HARD_CONFIRM') {
-      console.log('🔒 [INTERCEPTED] Tripwire HELD execution for Admin Confirmation. Stopping workflow.');
-      return {
-        success: true,
-        status: 'tripwire_held',
-        data: `🔒 **Tripwire Security Harness: Held for Administrator Confirmation**\n- **Action**: ${proposal.action} (${proposal.resource})\n- **Risk Band**: ${tripwireDecision.risk_band} | Trajectory Score: ${tripwireDecision.trajectory_score}\n- **Reason**: ${tripwireDecision.reason}\n\n*Please review and approve this action on the Tripwire Security Dashboard (http://localhost:5173).*`
-      };
-    }
-    console.log('✅ [ALLOWED] Tripwire ALLOWED action. Proceeding to n8n database execution...\n');
-  }
-
+/**
+ * Helper to dispatch execution directly to n8n webhook
+ */
+async function dispatchToN8N({ user, query, sessionId, isPreApproved = false, approvedBy = null }) {
   const webhookUrl = config.n8nWebhookUrl;
-
-  const payload = {
-    user: {
-      id: user?.id || 'unknown',
-      name: user?.name || 'Anonymous Employee',
-      email: user?.email || '',
-      role: user?.role || 'Employee'
-    },
-    query: query.trim(),
-    source: 'company-app',
-    timestamp: new Date().toISOString(),
-    session_id: currentSessionId
-  };
-
-  // If webhook is not configured yet
   if (!webhookUrl || webhookUrl.trim() === '') {
     return {
       success: false,
       status: 'not_configured',
-      message: 'n8n webhook URL is not configured in backend environment (N8N_WEBHOOK_URL). Ready for workflow connection.',
-      payloadSent: payload
+      message: 'n8n webhook URL is not configured in backend environment (N8N_WEBHOOK_URL).'
     };
   }
+
+  const payload = {
+    user: {
+      id: user?.id || 'user_1',
+      name: user?.name || 'Authorized User',
+      email: user?.email || '',
+      role: user?.role || 'Backend Developer'
+    },
+    query: isPreApproved ? `[ADMIN PRE-APPROVED EXECUTION] ${query}` : query.trim(),
+    source: isPreApproved ? 'tripwire-hitl-approval' : 'company-app',
+    approved_by: approvedBy,
+    timestamp: new Date().toISOString(),
+    session_id: sessionId,
+    is_pre_approved: isPreApproved
+  };
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), config.n8nTimeoutMs);
@@ -189,86 +178,118 @@ export async function forwardToN8N({ user, query, sessionId }) {
 }
 
 /**
+ * Forward user natural-language query and role context to n8n webhook with Tripwire sequential security evaluation
+ */
+export async function forwardToN8N({ user, query, sessionId }) {
+  const currentSessionId = sessionId || 'sess_1_demo';
+  const steps = parseSequentialSteps(query);
+
+  console.log(`\n📋 [SEQUENTIAL PIPELINE] Identified ${steps.length} sequential step(s) in query:`);
+  steps.forEach((step, idx) => console.log(`   [Step ${idx + 1}]: "${step}"`));
+
+  const executedResults = [];
+
+  for (let i = 0; i < steps.length; i++) {
+    const currentStepQuery = steps[i];
+    const proposal = extractActionProposal(user, currentStepQuery);
+
+    const proposalPayload = {
+      principal_id: user?.role || 'Backend Developer',
+      session_id: currentSessionId,
+      agent_id: 'techflow_ollama_agent',
+      action: proposal.action,
+      resource: proposal.resource,
+      parameters: proposal.parameters
+    };
+
+    console.log(`\n⏳ [PIPELINE STEP ${i + 1}/${steps.length}] Evaluating Step: "${currentStepQuery}"`);
+    const tripwireDecision = await evaluateWithTripwire(proposalPayload);
+
+    if (tripwireDecision) {
+      if (tripwireDecision.decision === 'BLOCK') {
+        console.log(`⛔ [INTERCEPTED] Tripwire BLOCKED execution at step ${i + 1}.`);
+        return {
+          success: true,
+          status: 'tripwire_blocked',
+          data: `⛔ **Tripwire Security Harness: Action BLOCKED (Step ${i + 1}/${steps.length})**\n- **Step**: "${currentStepQuery}"\n- **Reason**: ${tripwireDecision.reason}\n- **Principal**: ${user?.role}\n- **Action**: ${proposal.action}\n- **Trajectory Risk**: ${tripwireDecision.risk_band} (${tripwireDecision.trajectory_score})`
+        };
+      }
+
+      if (tripwireDecision.decision === 'CONFIRM' || tripwireDecision.decision === 'HARD_CONFIRM') {
+        console.log(`🔒 [INTERCEPTED] Tripwire HELD execution at step ${i + 1} for Admin Confirmation.`);
+        let summaryPrefix = '';
+        if (executedResults.length > 0) {
+          summaryPrefix = `✅ **Completed prior steps (${executedResults.length}/${steps.length}):**\n` +
+            executedResults.map((r, idx) => `• Step ${idx + 1}: ${steps[idx]}`).join('\n') + '\n\n';
+        }
+
+        return {
+          success: true,
+          status: 'tripwire_held',
+          data: `${summaryPrefix}🔒 **Tripwire Security Harness: Held for Administrator Confirmation (Step ${i + 1}/${steps.length})**\n- **Action**: ${proposal.action} (${proposal.resource})\n- **Pending Step**: "${currentStepQuery}"\n- **Risk Band**: ${tripwireDecision.risk_band} | Trajectory Score: ${tripwireDecision.trajectory_score}\n- **Reason**: ${tripwireDecision.reason}\n\n*Please review and approve this action on the Tripwire Security Dashboard (http://localhost:5173).*`
+        };
+      }
+    }
+
+    // Step was ALLOWED: Execute on n8n
+    console.log(`✅ [ALLOWED] Step ${i + 1} ALLOWED by Tripwire. Executing via n8n...`);
+    const stepExecResult = await dispatchToN8N({
+      user,
+      query: currentStepQuery,
+      sessionId: currentSessionId
+    });
+
+    executedResults.push(stepExecResult);
+  }
+
+  // If all steps were executed synchronously (e.g. all read/write allowed)
+  const lastResult = executedResults[executedResults.length - 1];
+  return lastResult || {
+    success: true,
+    status: 'delivered',
+    data: { response: 'All steps executed successfully.' }
+  };
+}
+
+/**
  * Execute an admin-approved action directly on n8n
  */
 export async function executeConfirmedAction({ action_id, proposal, approved_by }) {
-  const webhookUrl = config.n8nWebhookUrl;
-  if (!webhookUrl || webhookUrl.trim() === '') {
-    return { success: false, message: 'n8n Webhook URL is not configured' };
-  }
-
   const originalQuery = proposal?.parameters?.original_query || '';
   const actionName = proposal?.action || 'database action';
   const resourceName = proposal?.resource || 'database';
 
   let targetedInstruction = '';
-  if (proposal?.parameters?.customer_id) {
+  if (originalQuery) {
+    targetedInstruction = originalQuery;
+  } else if (proposal?.parameters?.customer_id) {
     targetedInstruction = `Delete the customer record with customer_id ${proposal.parameters.customer_id} from ${resourceName}.`;
   } else if (proposal?.parameters?.server_id) {
     targetedInstruction = `Delete the server record with server_id ${proposal.parameters.server_id} from ${resourceName}.`;
-  } else if (originalQuery) {
-    targetedInstruction = originalQuery;
   } else {
     targetedInstruction = `Execute ${actionName} on ${resourceName}.`;
   }
-
-  const payload = {
-    user: {
-      id: 'admin',
-      name: approved_by || 'Security Administrator',
-      email: 'admin@techflow.com',
-      role: proposal?.principal_id || 'DevOps Engineer'
-    },
-    query: `[ADMIN PRE-APPROVED EXECUTION] ${targetedInstruction}`,
-    source: 'tripwire-hitl-approval',
-    approved_by: approved_by || 'Security Administrator',
-    timestamp: new Date().toISOString(),
-    session_id: proposal?.session_id || 'sess_1_demo',
-    is_pre_approved: true
-  };
 
   console.log('\n======================================================================');
   console.log('⚡ [ADMIN HITL APPROVED] Dispatching execution to n8n Webhook');
   console.log('📋 Action ID:', action_id);
   console.log('👤 Approved By:', approved_by);
-  console.log('🎯 Proposal Action:', proposal?.action);
-  console.log('📦 Proposal Resource:', proposal?.resource);
-  console.log('🔍 Proposal Parameters:', JSON.stringify(proposal?.parameters, null, 2));
-  console.log('🌐 n8n Webhook Target URL:', webhookUrl);
-  console.log('📤 Final Dispatch Payload:\n', JSON.stringify(payload, null, 2));
+  console.log('🎯 Target Action:', actionName);
+  console.log('📝 Instruction:', targetedInstruction);
   console.log('======================================================================\n');
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), config.n8nTimeoutMs);
+  const result = await dispatchToN8N({
+    user: {
+      id: 'admin',
+      name: approved_by || 'Security Administrator',
+      email: 'admin@techflow.com',
+      role: proposal?.principal_id || 'Backend Developer'
+    },
+    query: targetedInstruction,
+    sessionId: proposal?.session_id || 'sess_1_demo',
+    isPreApproved: true,
+    approvedBy: approved_by || 'Security Administrator'
+  });
 
-  try {
-    const res = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-
-    console.log(`📥 [n8n RESPONSE] Status: ${res.status} ${res.statusText}`);
-
-    const contentType = res.headers.get('content-type') || '';
-    let data;
-    if (contentType.includes('application/json')) {
-      data = await res.json();
-    } else {
-      data = { response: await res.text() };
-    }
-    console.log('📄 [n8n RESPONSE DATA]:\n', JSON.stringify(data, null, 2));
-    console.log('======================================================================\n');
-    return { success: true, data };
-  } catch (err) {
-    clearTimeout(timeoutId);
-    console.error('❌ [n8n DISPATCH ERROR]:', err.message);
-    console.log('======================================================================\n');
-    return { success: false, error: err.message };
-  }
+  return result;
 }
