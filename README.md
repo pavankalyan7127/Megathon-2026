@@ -28,7 +28,7 @@
 
 ---
 
-## 🏛️ Executive Summary & System Architecture
+## Executive Summary & System Architecture
 
 Autonomous AI agents executing tools on enterprise infrastructure introduce unprecedented security challenges: **gradual scope drift**, **privilege escalation ("Boiling Frog" attacks)**, **irreversible state mutations**, and **cross-domain resource corruption**.
 
@@ -83,7 +83,7 @@ This repository contains two interconnected platforms designed to demonstrate, m
 
 ---
 
-## 💼 TechFlow: Enterprise Employee Workspace
+## TechFlow: Enterprise Employee Workspace
 
 TechFlow is an enterprise SaaS simulation where real corporate users authenticate, view domain-specific tasks, and request AI assistance.
 
