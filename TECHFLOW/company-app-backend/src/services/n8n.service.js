@@ -23,32 +23,49 @@ function parseSequentialSteps(query) {
  */
 function extractActionProposal(user, query) {
   const q = query.toLowerCase();
-  let action = 'BACKEND_DB_GET';
-  let resource = 'BACKEND_DB';
-
-  if (user?.role === 'DevOps Engineer' || q.includes('devops') || q.includes('server') || q.includes('infra') || q.includes('deploy')) {
-    resource = 'DEVOPS_DB';
-    if (q.includes('delete') || q.includes('remove') || q.includes('drop')) {
-      action = 'DEVOPS_DB_DELETE';
-    } else if (q.includes('update') || q.includes('change') || q.includes('modify') || q.includes('set')) {
-      action = 'DEVOPS_DB_UPDATE';
-    } else if (q.includes('add') || q.includes('append') || q.includes('create') || q.includes('insert')) {
-      action = 'DEVOPS_DB_APPEND';
-    } else {
-      action = 'DEVOPS_DB_GET';
-    }
-  } else {
-    resource = 'BACKEND_DB';
-    if (q.includes('delete') || q.includes('remove') || q.includes('drop')) {
-      action = 'BACKEND_DB_DELETE';
-    } else if (q.includes('update') || q.includes('change') || q.includes('modify') || q.includes('set')) {
-      action = 'BACKEND_DB_UPDATE';
-    } else if (q.includes('add') || q.includes('append') || q.includes('create') || q.includes('insert')) {
-      action = 'BACKEND_DB_APPEND';
-    } else {
-      action = 'BACKEND_DB_GET';
-    }
+  
+  // 1. Determine target domain/database from the query text first
+  let domain = null;
+  if (q.includes('backend') || q.includes('customer') || q.includes('client') || q.includes('order')) {
+    domain = 'backend';
+  } else if (q.includes('devops') || q.includes('server') || q.includes('infra') || q.includes('deploy')) {
+    domain = 'devops';
+  } else if (q.includes('frontend') || q.includes('ui') || q.includes('component')) {
+    domain = 'frontend';
+  } else if (q.includes('hr') || q.includes('employee') || q.includes('leave') || q.includes('salary') || q.includes('payroll')) {
+    domain = 'hr';
+  } else if (q.includes('project') || q.includes('task') || q.includes('sprint') || q.includes('milestone')) {
+    domain = 'projectmanager';
+  } else if (q.includes('business') || q.includes('analyst') || q.includes('requirement') || q.includes('story')) {
+    domain = 'business_analyst';
+  } else if (q.includes('architect') || q.includes('system design') || q.includes('topology')) {
+    domain = 'architect';
   }
+
+  // 2. Fall back to user's assigned role domain if query didn't specify a target domain
+  if (!domain) {
+    if (user?.role === 'DevOps Engineer') domain = 'devops';
+    else if (user?.role === 'Frontend Developer') domain = 'frontend';
+    else if (user?.role === 'HR') domain = 'hr';
+    else if (user?.role === 'Project Manager') domain = 'projectmanager';
+    else if (user?.role === 'Business Analyst') domain = 'business_analyst';
+    else if (user?.role === 'Software Architect') domain = 'architect';
+    else domain = 'backend';
+  }
+
+  const resource = domain.toUpperCase() + '_DB';
+  let op = 'GET';
+  if (q.includes('delete') || q.includes('remove') || q.includes('drop') || q.includes('clean')) {
+    op = 'DELETE';
+  } else if (q.includes('update') || q.includes('change') || q.includes('modify') || q.includes('set')) {
+    op = 'UPDATE';
+  } else if (q.includes('add') || q.includes('append') || q.includes('create') || q.includes('insert')) {
+    op = 'APPEND';
+  } else {
+    op = 'GET';
+  }
+
+  const action = `${resource}_${op}`;
 
   // Extract parameters
   const params = { original_query: query };

@@ -69,12 +69,12 @@ export const ScenarioRunner: React.FC<Props> = ({
   const isCompleted = activeScenario && currentStepIndex >= activeScenario.steps.length;
 
   return (
-    <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+      <div className="flex items-center justify-between pb-3 border-b border-slate-200">
         <div>
-          <h3 className="text-sm font-semibold text-slate-100">Scenario Demonstrator (Judge Showcase)</h3>
-          <p className="text-[11px] text-slate-400">1-Click reproducible test vectors for attack &amp; legitimate workflows</p>
+          <h3 className="text-sm font-bold text-slate-900">Predefined Scenario Demonstrator</h3>
+          <p className="text-[11px] text-slate-500">1-Click reproducible test vectors for attack &amp; legitimate agent workflows</p>
         </div>
         <div className="flex items-center space-x-2">
           <button
@@ -83,7 +83,7 @@ export const ScenarioRunner: React.FC<Props> = ({
               setAutoPlaying(false);
               onReset(selectedScenarioKey === 'cross_session_2' ? 0.42 : 0.0);
             }}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition text-xs flex items-center space-x-1 cursor-pointer border border-slate-700"
+            className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition text-xs flex items-center space-x-1 cursor-pointer border border-slate-200 font-medium"
             title="Reset Simulation State"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -98,16 +98,16 @@ export const ScenarioRunner: React.FC<Props> = ({
           onClick={() => handleSelectScenario('attack')}
           className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
             selectedScenarioKey === 'attack'
-              ? 'bg-rose-950/40 border-rose-600/70 text-rose-200 ring-1 ring-rose-500/50'
-              : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
+              ? 'bg-rose-50 border-rose-400 text-rose-900 ring-2 ring-rose-400/50'
+              : 'bg-slate-50 border-slate-200 hover:border-slate-300 text-slate-700'
           }`}
         >
           <div className="flex items-center space-x-2">
-            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
             <span className="text-xs font-bold">1. Boiling Frog Attack</span>
           </div>
-          <p className="text-[10px] text-slate-400 mt-2">
-            6-step escalation: read logs -&gt; modify customer -&gt; drop table (BLOCKED).
+          <p className="text-[10px] text-slate-500 mt-2">
+            6-step escalation: read logs &rarr; modify customer &rarr; drop table (BLOCKED).
           </p>
         </button>
 
@@ -115,15 +115,15 @@ export const ScenarioRunner: React.FC<Props> = ({
           onClick={() => handleSelectScenario('legitimate')}
           className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
             selectedScenarioKey === 'legitimate'
-              ? 'bg-emerald-950/40 border-emerald-600/70 text-emerald-200 ring-1 ring-emerald-500/50'
-              : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
+              ? 'bg-emerald-50 border-emerald-400 text-emerald-900 ring-2 ring-emerald-400/50'
+              : 'bg-slate-50 border-slate-200 hover:border-slate-300 text-slate-700'
           }`}
         >
           <div className="flex items-center space-x-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
             <span className="text-xs font-bold">2. Legitimate Report</span>
           </div>
-          <p className="text-[10px] text-slate-400 mt-2">
+          <p className="text-[10px] text-slate-500 mt-2">
             In-scope operational workflow that completes smoothly without false positives.
           </p>
         </button>
@@ -132,15 +132,15 @@ export const ScenarioRunner: React.FC<Props> = ({
           onClick={() => handleSelectScenario('cross_session_1')}
           className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
             selectedScenarioKey.startsWith('cross_session')
-              ? 'bg-indigo-950/40 border-indigo-600/70 text-indigo-200 ring-1 ring-indigo-500/50'
-              : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
+              ? 'bg-indigo-50 border-indigo-400 text-indigo-900 ring-2 ring-indigo-400/50'
+              : 'bg-slate-50 border-slate-200 hover:border-slate-300 text-slate-700'
           }`}
         >
           <div className="flex items-center space-x-2">
-            <Database className="w-4 h-4 text-indigo-400 shrink-0" />
+            <Database className="w-4 h-4 text-indigo-600 shrink-0" />
             <span className="text-xs font-bold">3. Cross-Session Memory</span>
           </div>
-          <p className="text-[10px] text-slate-400 mt-2">
+          <p className="text-[10px] text-slate-500 mt-2">
             Session 1 context persists into Session 2, intercepting multi-day attacks early.
           </p>
         </button>
@@ -148,15 +148,15 @@ export const ScenarioRunner: React.FC<Props> = ({
 
       {/* Cross-session phase selector */}
       {selectedScenarioKey.startsWith('cross_session') && (
-        <div className="flex items-center justify-between bg-slate-950/90 p-2.5 rounded-lg border border-indigo-900/50 text-xs">
-          <span className="text-slate-400 text-[11px] font-semibold">Active Session Phase:</span>
+        <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-lg border border-indigo-200 text-xs">
+          <span className="text-slate-700 text-[11px] font-bold">Active Session Phase:</span>
           <div className="flex space-x-2">
             <button
               onClick={() => handleSelectScenario('cross_session_1')}
               className={`px-3 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
                 selectedScenarioKey === 'cross_session_1'
-                  ? 'bg-indigo-600 text-white shadow'
-                  : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
               }`}
             >
               Session 1 (Recon &amp; Setup)
@@ -165,8 +165,8 @@ export const ScenarioRunner: React.FC<Props> = ({
               onClick={() => handleSelectScenario('cross_session_2')}
               className={`px-3 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
                 selectedScenarioKey === 'cross_session_2'
-                  ? 'bg-indigo-600 text-white shadow'
-                  : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
               }`}
             >
               Session 2 (Infiltration Catch)
@@ -176,18 +176,18 @@ export const ScenarioRunner: React.FC<Props> = ({
       )}
 
       {/* Speed Slider & Queue */}
-      <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-4 space-y-3">
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
         <div className="flex justify-between items-center text-xs">
-          <span className="text-slate-400">
-            Step Queue: <span className="font-mono text-slate-200 font-bold">{currentStepIndex} / {activeScenario?.steps.length || 0}</span>
+          <span className="text-slate-600 font-medium">
+            Step Queue: <span className="font-mono text-slate-900 font-bold">{currentStepIndex} / {activeScenario?.steps.length || 0}</span>
           </span>
-          <div className="flex items-center space-x-2 text-[11px] text-slate-400">
+          <div className="flex items-center space-x-2 text-[11px] text-slate-600">
             <Sliders className="w-3.5 h-3.5 text-slate-500" />
-            <span>Delay:</span>
+            <span className="font-medium">Delay:</span>
             <select
               value={stepDelayMs}
               onChange={(e) => setStepDelayMs(Number(e.target.value))}
-              className="bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-slate-300 font-mono text-[10px]"
+              className="bg-white border border-slate-300 rounded px-2 py-0.5 text-slate-800 font-mono text-[10px] focus:outline-none focus:border-indigo-500"
             >
               <option value={400}>Fast (0.4s)</option>
               <option value={700}>Normal (0.7s)</option>
@@ -204,28 +204,28 @@ export const ScenarioRunner: React.FC<Props> = ({
             return (
               <div
                 key={idx}
-                className={`p-2 rounded text-xs flex items-center justify-between font-mono border transition ${
+                className={`p-2 rounded-lg text-xs flex items-center justify-between font-mono border transition ${
                   isCurrent
-                    ? 'bg-indigo-950/60 border-indigo-500/70 text-indigo-200'
+                    ? 'bg-indigo-50 border-indigo-300 text-indigo-900 font-bold'
                     : isDone
-                    ? 'bg-slate-900/40 border-slate-800/40 text-slate-500 line-through'
-                    : 'bg-slate-950/40 border-slate-800/60 text-slate-400'
+                    ? 'bg-slate-100/70 border-slate-200 text-slate-400 line-through'
+                    : 'bg-white border-slate-200 text-slate-700'
                 }`}
               >
                 <div className="flex items-center space-x-2 truncate">
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 font-bold">
                     #{s.step}
                   </span>
                   <span className="font-bold">{s.action}</span>
                   <span className="text-slate-500 text-[11px] truncate">({s.resource})</span>
                 </div>
                 <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded shrink-0 ${
+                  className={`text-[10px] px-1.5 py-0.2 rounded shrink-0 font-semibold ${
                     s.expected_reversibility === 'DESTRUCTIVE'
-                      ? 'text-rose-400 bg-rose-950/50'
+                      ? 'text-rose-700 bg-rose-50 border border-rose-200'
                       : s.expected_reversibility === 'WRITE'
-                      ? 'text-amber-400 bg-amber-950/50'
-                      : 'text-emerald-400 bg-emerald-950/50'
+                      ? 'text-amber-700 bg-amber-50 border border-amber-200'
+                      : 'text-emerald-700 bg-emerald-50 border border-emerald-200'
                   }`}
                 >
                   {s.expected_reversibility}
@@ -240,7 +240,7 @@ export const ScenarioRunner: React.FC<Props> = ({
           <button
             disabled={isCompleted || isRunning || autoPlaying}
             onClick={handleNextStep}
-            className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-lg transition text-xs flex items-center justify-center space-x-2 cursor-pointer shadow-md shadow-indigo-600/20"
+            className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-lg transition text-xs flex items-center justify-center space-x-2 cursor-pointer shadow-sm"
           >
             <Play className="w-4 h-4" />
             <span>Step Next Action (#{currentStepIndex + 1})</span>
@@ -249,9 +249,9 @@ export const ScenarioRunner: React.FC<Props> = ({
           <button
             disabled={isCompleted || isRunning || autoPlaying}
             onClick={handleRunAll}
-            className="py-2.5 px-4 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 font-semibold rounded-lg border border-slate-700 transition text-xs flex items-center justify-center space-x-2 cursor-pointer"
+            className="py-2.5 px-4 bg-slate-800 hover:bg-slate-900 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition text-xs flex items-center justify-center space-x-2 cursor-pointer shadow-sm"
           >
-            <FastForward className="w-4 h-4 text-indigo-400" />
+            <FastForward className="w-4 h-4 text-indigo-300" />
             <span>{autoPlaying ? 'Running Scenario...' : 'Auto-Run Scenario'}</span>
           </button>
         </div>

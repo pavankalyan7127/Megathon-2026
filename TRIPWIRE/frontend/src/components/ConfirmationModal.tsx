@@ -24,44 +24,44 @@ export const ConfirmationModal: React.FC<Props> = ({
   const isHardConfirm = decision.decision === 'HARD_CONFIRM';
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
         {/* Modal Header */}
         <div className="flex items-start space-x-3">
-          <div className={`p-3 rounded-xl ${isHardConfirm ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
+          <div className={`p-3 rounded-xl ${isHardConfirm ? 'bg-orange-50 text-orange-600 border border-orange-200' : 'bg-amber-50 text-amber-600 border border-amber-200'}`}>
             {isHardConfirm ? <ShieldAlert className="w-6 h-6" /> : <AlertOctagon className="w-6 h-6" />}
           </div>
           <div>
-            <h3 className="text-base font-bold text-slate-100">
+            <h3 className="text-base font-bold text-slate-900">
               {isHardConfirm ? 'HARD CONFIRMATION GATE' : 'HUMAN APPROVAL REQUIRED'}
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Tripwire has gated this action from autonomous execution pending cryptographic or human verification.
+            <p className="text-xs text-slate-500 mt-0.5">
+              Tripwire has intercepted this action from autonomous execution pending human review &amp; authorization.
             </p>
           </div>
         </div>
 
         {/* Action Details Summary */}
-        <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-2.5 text-xs">
-          <div className="flex justify-between items-center text-slate-400">
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2.5 text-xs">
+          <div className="flex justify-between items-center text-slate-600">
             <span>Action Name:</span>
-            <span className="font-mono text-indigo-300 font-bold">{proposal.action}</span>
+            <span className="font-mono text-indigo-700 font-bold">{proposal.action}</span>
           </div>
-          <div className="flex justify-between items-center text-slate-400">
+          <div className="flex justify-between items-center text-slate-600">
             <span>Target Resource:</span>
-            <span className="font-mono text-slate-200">{proposal.resource}</span>
+            <span className="font-mono text-slate-800 font-semibold">{proposal.resource}</span>
           </div>
-          <div className="flex justify-between items-center text-slate-400">
+          <div className="flex justify-between items-center text-slate-600">
             <span>Reversibility Class:</span>
-            <span className="font-semibold text-rose-400 font-mono">{decision.reversibility}</span>
+            <span className="font-semibold text-rose-700 font-mono">{decision.reversibility}</span>
           </div>
-          <div className="flex justify-between items-center text-slate-400">
+          <div className="flex justify-between items-center text-slate-600">
             <span>Trajectory Risk Score:</span>
-            <span className="font-mono text-amber-400 font-bold">{decision.trajectory_score.toFixed(3)} ({decision.risk_band})</span>
+            <span className="font-mono text-amber-700 font-bold">{decision.trajectory_score.toFixed(3)} ({decision.risk_band})</span>
           </div>
-          <div className="pt-2 border-t border-slate-800/80 text-slate-300">
+          <div className="pt-2 border-t border-slate-200 text-slate-700">
             <span className="text-slate-500 text-[10px] uppercase font-bold block mb-1">Harness Intercept Reason:</span>
-            <p className="text-xs text-slate-300 leading-relaxed bg-slate-900/60 p-2 rounded border border-slate-800">
+            <p className="text-xs text-slate-800 leading-relaxed bg-white p-2.5 rounded-lg border border-slate-200">
               {decision.reason}
             </p>
           </div>
@@ -69,12 +69,12 @@ export const ConfirmationModal: React.FC<Props> = ({
 
         {/* Approver Input */}
         <div className="space-y-1.5 text-xs">
-          <label className="text-slate-400 font-medium">Authorizing Principal / SOC Approver ID:</label>
+          <label className="text-slate-700 font-semibold">Authorizing Principal / SOC Approver ID:</label>
           <input
             type="text"
             value={approverId}
             onChange={(e) => setApproverId(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono text-xs focus:outline-none focus:border-indigo-500"
+            className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono text-xs focus:outline-none focus:border-indigo-500"
             placeholder="e.g. admin_sec_ops"
           />
         </div>
@@ -86,9 +86,9 @@ export const ConfirmationModal: React.FC<Props> = ({
               onConfirm(approverId, false);
               onClose();
             }}
-            className="py-2.5 px-4 bg-slate-800 hover:bg-rose-950/80 hover:text-rose-300 text-slate-300 font-semibold rounded-lg border border-slate-700 hover:border-rose-700/50 transition text-xs flex items-center justify-center space-x-2 cursor-pointer"
+            className="py-2.5 px-4 bg-white hover:bg-rose-50 text-rose-700 font-semibold rounded-lg border border-rose-300 hover:border-rose-400 transition text-xs flex items-center justify-center space-x-2 cursor-pointer shadow-sm"
           >
-            <XCircle className="w-4 h-4 text-rose-400" />
+            <XCircle className="w-4 h-4 text-rose-600" />
             <span>DENY (Block Execution)</span>
           </button>
 
@@ -97,7 +97,7 @@ export const ConfirmationModal: React.FC<Props> = ({
               onConfirm(approverId, true);
               onClose();
             }}
-            className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold rounded-lg transition text-xs flex items-center justify-center space-x-2 shadow-lg shadow-emerald-600/20 cursor-pointer"
+            className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition text-xs flex items-center justify-center space-x-2 shadow-sm cursor-pointer"
           >
             <CheckCircle className="w-4 h-4" />
             <span>APPROVE &amp; REVALIDATE</span>

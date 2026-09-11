@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Shield,
   Activity,
   Terminal,
   Play,
-  RotateCcw,
   Lock,
   Layers,
-  Sparkles,
+  RefreshCw,
+  Cpu,
+  UserCheck,
 } from 'lucide-react';
 import {
   ActionProposal,
@@ -19,45 +20,72 @@ import {
 } from './types/tripwire';
 import { defaultTripwireClient, TripwireClient } from './api/client';
 import { TrajectoryChart } from './components/TrajectoryChart';
-import { DecisionCard } from './components/DecisionCard';
 import { ActionTimeline } from './components/ActionTimeline';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { AuditTable } from './components/AuditTable';
 import { ScenarioRunner } from './components/ScenarioRunner';
 import { ToolRegistryView } from './components/ToolRegistryView';
-import { CustomActionSandbox } from './components/CustomActionSandbox';
 import { ArchitectureView } from './components/ArchitectureView';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'scenarios' | 'sandbox' | 'audit' | 'tools' | 'architecture'
+    'dashboard' | 'scenarios' | 'audit' | 'tools' | 'architecture'
   >('dashboard');
   const [backendOnline, setBackendOnline] = useState<boolean>(false);
 
-  // Runtime State & Session Management
+  // --------------------------------------------------------------------------
+  // Dynamic TechFlow Session State (Overview & Trajectory Monitor Page)
+  // --------------------------------------------------------------------------
   const [sessionId, setSessionId] = useState<string>('sess_1_demo');
-  const [availableSessions, setAvailableSessions] = useState<Array<{ session_id: string; principal_id?: string }>>([]);
+  const [availableSessions, setAvailableSessions] = useState<
+    Array<{ session_id: string; principal_id?: string }>
+  >([]);
   const [autoSyncSession, setAutoSyncSession] = useState<boolean>(true);
   const [principalId, setPrincipalId] = useState<string>('Backend Developer');
   const [currentScore, setCurrentScore] = useState<number>(0.0);
   const [currentRiskBand, setCurrentRiskBand] = useState<RiskBandType>('LOW');
-
-  const [currentProposal, setCurrentProposal] = useState<ActionProposal | null>(null);
-  const [currentDecision, setCurrentDecision] = useState<ActionDecision | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<TrajectoryEvent | null>(null);
   const [events, setEvents] = useState<TrajectoryEvent[]>([]);
-  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
-  const [toolExecutionCounts, setToolExecutionCounts] = useState<Record<string, number>>({});
 
-  // HITL Modal State
+  // --------------------------------------------------------------------------
+  // Audit Forensics State (All DB Logs)
+  // --------------------------------------------------------------------------
+  const [allDbAuditEvents, setAllDbAuditEvents] = useState<AuditEvent[]>([]);
+  const [isAuditLoading, setIsAuditLoading] = useState<boolean>(false);
+
+  // --------------------------------------------------------------------------
+  // Interactive Scenario Runner Dedicated State (Isolated from TechFlow)
+  // --------------------------------------------------------------------------
+  const [scenarioEvents, setScenarioEvents] = useState<TrajectoryEvent[]>([]);
+  const [scenarioScore, setScenarioScore] = useState<number>(0.0);
+  const [scenarioRiskBand, setScenarioRiskBand] = useState<RiskBandType>('LOW');
+  const [scenarioSelectedEvent, setScenarioSelectedEvent] = useState<TrajectoryEvent | null>(null);
+  const [scenarioToolCounts, setScenarioToolCounts] = useState<Record<string, number>>({});
+
+  // --------------------------------------------------------------------------
+  // Human-in-the-Loop Modal State
+  // --------------------------------------------------------------------------
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState<boolean>(false);
   const [pendingConfirmDecision, setPendingConfirmDecision] = useState<ActionDecision | null>(null);
   const [pendingConfirmProposal, setPendingConfirmProposal] = useState<ActionProposal | null>(null);
+  const [handledModalActionIds, setHandledModalActionIds] = useState<Set<string>>(new Set());
 
-  // Track handled action IDs for modal to prevent re-opening for already dismissed items
-  const [handledModalActionIds, sethandledModalActionIds] = useState<Set<string>>(new Set());
+  // Function to fetch database audit logs
+  const fetchAllAuditLogs = useCallback(async () => {
+    setIsAuditLoading(true);
+    try {
+      const res = await defaultTripwireClient.getAllAudit();
+      if (res && res.events) {
+        setAllDbAuditEvents(res.events);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch database audit logs:', err);
+    } finally {
+      setIsAuditLoading(false);
+    }
+  }, []);
 
-  // Poll backend health and auto-sync active session data from FastAPI
+  // Poll backend health, sessions, active session trajectory & all audit logs
   useEffect(() => {
     const sync = async () => {
       const res = await defaultTripwireClient.checkHealth();
@@ -69,7 +97,9 @@ export default function App() {
         try {
           const sessList = await defaultTripwireClient.listSessions();
           if (sessList && sessList.length > 0) {
-            setAvailableSessions(sessList.map((s) => ({ session_id: s.session_id, principal_id: s.principal_id })));
+            setAvailableSessions(
+              sessList.map((s) => ({ session_id: s.session_id, principal_id: s.principal_id }))
+            );
             if (autoSyncSession) {
               const latestId = sessList[0].session_id;
               if (latestId && latestId !== sessionId) {
@@ -86,87 +116,103 @@ export default function App() {
         }
 
         const targetSession = currentTargetSession || 'sess_1_demo';
-        const audit = await defaultTripwireClient.getAudit(targetSession);
-        if (audit && audit.events && audit.events.length > 0) {
-          setAuditEvents(audit.events);
-          // Audit events are ordered chronologically (oldest to newest), so last element is latest
-          const latestEvent = audit.events[audit.events.length - 1];
-          setCurrentScore(latestEvent.trajectory_score);
-          setCurrentRiskBand(latestEvent.risk_band);
-          setPrincipalId(latestEvent.principal_id);
 
-          const traj = await defaultTripwireClient.getTrajectory(targetSession);
-          if (traj && traj.events) {
-            setEvents(traj.events);
+        // 2. Fetch active session trajectory & audit events
+        try {
+          const audit = await defaultTripwireClient.getAudit(targetSession);
+          if (audit && audit.events && audit.events.length > 0) {
+            const latestEvent = audit.events[audit.events.length - 1];
+            setCurrentScore(latestEvent.trajectory_score);
+            setCurrentRiskBand(latestEvent.risk_band);
+            setPrincipalId(latestEvent.principal_id);
+
+            const traj = await defaultTripwireClient.getTrajectory(targetSession);
+            if (traj && traj.events) {
+              setEvents(traj.events);
+            }
+
+            // Scan for pending CONFIRM event
+            const pendingEvent = [...audit.events].reverse().find(
+              (e) =>
+                (e.decision === 'CONFIRM' || e.decision === 'HARD_CONFIRM') &&
+                e.execution_status === 'NOT_EXECUTED' &&
+                !handledModalActionIds.has(e.action_id)
+            );
+
+            if (pendingEvent && !isConfirmModalOpen) {
+              const decisionObj: ActionDecision = {
+                action_id: pendingEvent.action_id,
+                decision: pendingEvent.decision,
+                trajectory_score: pendingEvent.trajectory_score,
+                risk_band: pendingEvent.risk_band,
+                reversibility: pendingEvent.reversibility,
+                reason: pendingEvent.reason,
+              };
+              const proposalObj: ActionProposal = {
+                principal_id: pendingEvent.principal_id,
+                session_id: pendingEvent.session_id,
+                agent_id: pendingEvent.agent_id,
+                action: pendingEvent.action,
+                resource: pendingEvent.resource,
+                parameters: pendingEvent.parameters,
+              };
+              setPendingConfirmDecision(decisionObj);
+              setPendingConfirmProposal(proposalObj);
+              setIsConfirmModalOpen(true);
+            }
           }
+        } catch (e) {
+          console.warn('Active session sync failed:', e);
+        }
 
-          // Scan for any pending CONFIRM event that has not been handled
-          const pendingEvent = [...audit.events].reverse().find(
-            (e) =>
-              (e.decision === 'CONFIRM' || e.decision === 'HARD_CONFIRM') &&
-              e.execution_status === 'NOT_EXECUTED' &&
-              !handledModalActionIds.has(e.action_id)
-          );
-
-          if (pendingEvent && !isConfirmModalOpen) {
-            const decisionObj: ActionDecision = {
-              action_id: pendingEvent.action_id,
-              decision: pendingEvent.decision,
-              trajectory_score: pendingEvent.trajectory_score,
-              risk_band: pendingEvent.risk_band,
-              reversibility: pendingEvent.reversibility,
-              reason: pendingEvent.reason,
-            };
-            const proposalObj: ActionProposal = {
-              principal_id: pendingEvent.principal_id,
-              session_id: pendingEvent.session_id,
-              agent_id: pendingEvent.agent_id,
-              action: pendingEvent.action,
-              resource: pendingEvent.resource,
-              parameters: pendingEvent.parameters,
-            };
-            setPendingConfirmDecision(decisionObj);
-            setPendingConfirmProposal(proposalObj);
-            setCurrentDecision(decisionObj);
-            setCurrentProposal(proposalObj);
-            setIsConfirmModalOpen(true);
+        // 3. Fetch all database logs
+        try {
+          const allLogs = await defaultTripwireClient.getAllAudit();
+          if (allLogs && allLogs.events) {
+            setAllDbAuditEvents(allLogs.events);
           }
+        } catch (e) {
+          console.warn('All-audit sync error:', e);
         }
       }
     };
+
     sync();
     const interval = setInterval(sync, 2500);
     return () => clearInterval(interval);
   }, [sessionId, autoSyncSession, isConfirmModalOpen, handledModalActionIds]);
 
-  const handleReset = (initialScore: number = 0.0) => {
+  // --------------------------------------------------------------------------
+  // Scenario Runner Handlers (Dedicated to Predefined Scenarios)
+  // --------------------------------------------------------------------------
+  const handleScenarioReset = (initialScore: number = 0.0) => {
     TripwireClient.resetSimState(initialScore);
-    setCurrentScore(initialScore);
-    setCurrentRiskBand(initialScore > 0.65 ? 'HIGH' : initialScore >= 0.35 ? 'MEDIUM' : 'LOW');
-    setCurrentProposal(null);
-    setCurrentDecision(null);
-    setSelectedEvent(null);
-    setEvents([]);
-    setToolExecutionCounts({});
-    setSessionId(`session_${Date.now().toString().slice(-4)}`);
+    setScenarioScore(initialScore);
+    setScenarioRiskBand(initialScore > 0.65 ? 'HIGH' : initialScore >= 0.35 ? 'MEDIUM' : 'LOW');
+    setScenarioSelectedEvent(null);
+    setScenarioEvents([]);
+    setScenarioToolCounts({});
   };
 
-  const handleDispatchProposal = async (proposal: ActionProposal) => {
-    setPrincipalId(proposal.principal_id);
-    setCurrentProposal(proposal);
+  const handleScenarioStepAction = async (step: ScenarioStep, principal: string, agentId: string) => {
+    const proposal: ActionProposal = {
+      principal_id: principal,
+      session_id: `scenario_sess_${Date.now().toString().slice(-4)}`,
+      agent_id: agentId,
+      action: step.action,
+      resource: step.resource,
+      parameters: step.parameters,
+    };
 
-    // Call Tripwire
     const decision = await defaultTripwireClient.proposeAction(proposal);
-    setCurrentDecision(decision);
-    setCurrentScore(decision.trajectory_score);
-    setCurrentRiskBand(decision.risk_band);
+    setScenarioScore(decision.trajectory_score);
+    setScenarioRiskBand(decision.risk_band);
 
     const isAllowed = decision.decision === 'ALLOW';
     const isConfirm = decision.decision === 'CONFIRM' || decision.decision === 'HARD_CONFIRM';
 
-    // Record Trajectory Event
     const newEvent: TrajectoryEvent = {
-      step: events.length + 1,
+      step: scenarioEvents.length + 1,
       action: proposal.action,
       resource: proposal.resource,
       reversibility: decision.reversibility,
@@ -176,30 +222,11 @@ export default function App() {
       reason: decision.reason,
       timestamp: new Date().toISOString(),
     };
-    setEvents((prev) => [...prev, newEvent]);
 
-    // Record Audit Event
-    const newAuditEvent: AuditEvent = {
-      action_id: decision.action_id,
-      principal_id: proposal.principal_id,
-      session_id: sessionId,
-      agent_id: proposal.agent_id,
-      action: proposal.action,
-      resource: proposal.resource,
-      reversibility: decision.reversibility,
-      trajectory_score: decision.trajectory_score,
-      risk_band: decision.risk_band,
-      decision: decision.decision,
-      reason: decision.reason,
-      timestamp: new Date().toISOString(),
-      parameters: proposal.parameters,
-      execution_status: isAllowed ? 'EXECUTED' : isConfirm ? 'PENDING_APPROVAL' : 'NOT_EXECUTED',
-    };
-    setAuditEvents((prev) => [newAuditEvent, ...prev]);
+    setScenarioEvents((prev) => [...prev, newEvent]);
 
-    // Protected Tool Handling
     if (isAllowed) {
-      setToolExecutionCounts((prev) => ({
+      setScenarioToolCounts((prev) => ({
         ...prev,
         [proposal.action]: (prev[proposal.action] || 0) + 1,
       }));
@@ -208,65 +235,20 @@ export default function App() {
       setPendingConfirmProposal(proposal);
       setIsConfirmModalOpen(true);
     }
-
-    // Try to sync with authoritative backend data
-    if (backendOnline) {
-      const traj = await defaultTripwireClient.getTrajectory(sessionId);
-      if (traj && traj.events) {
-        setEvents(traj.events);
-      }
-      const audit = await defaultTripwireClient.getAudit(sessionId);
-      if (audit && audit.events) {
-        setAuditEvents(audit.events);
-      }
-    }
   };
 
-  const handleStepAction = async (step: ScenarioStep, principal: string, agentId: string) => {
-    await handleDispatchProposal({
-      principal_id: principal,
-      session_id: sessionId,
-      agent_id: agentId,
-      action: step.action,
-      resource: step.resource,
-      parameters: step.parameters,
-    });
-  };
-
+  // --------------------------------------------------------------------------
+  // Human Confirmation Handler
+  // --------------------------------------------------------------------------
   const handleHumanConfirm = async (approvedBy: string, approve: boolean) => {
     if (!pendingConfirmDecision || !pendingConfirmProposal) return;
 
     if (!approve) {
-      // DENY: Call backend deny endpoint to persist BLOCK in database and NEVER call n8n
       await defaultTripwireClient.denyAction(pendingConfirmDecision.action_id, approvedBy);
-
-      setAuditEvents((prev) =>
-        prev.map((a) =>
-          a.action_id === pendingConfirmDecision.action_id
-            ? { ...a, decision: 'BLOCK', execution_status: 'NOT_EXECUTED', reason: `Denied by human operator (${approvedBy})`, approved_by: approvedBy }
-            : a
-        )
-      );
-      setEvents((prev) =>
-        prev.map((evt) =>
-          evt.action === pendingConfirmProposal.action && evt.decision === pendingConfirmDecision.decision
-            ? { ...evt, decision: 'BLOCK', reason: `Denied by human operator (${approvedBy})` }
-            : evt
-        )
-      );
-      if (pendingConfirmDecision) {
-        sethandledModalActionIds((prev) => new Set([...prev, pendingConfirmDecision.action_id]));
-      }
+      setHandledModalActionIds((prev) => new Set([...prev, pendingConfirmDecision.action_id]));
       setPendingConfirmDecision(null);
       setPendingConfirmProposal(null);
-
-      // Sync with authoritative backend data
-      if (backendOnline) {
-        const audit = await defaultTripwireClient.getAudit(sessionId);
-        if (audit && audit.events) {
-          setAuditEvents(audit.events);
-        }
-      }
+      fetchAllAuditLogs();
       return;
     }
 
@@ -276,190 +258,98 @@ export default function App() {
     );
 
     if (res.decision === 'ALLOW') {
-      setToolExecutionCounts((prev) => ({
-        ...prev,
-        [pendingConfirmProposal.action]: (prev[pendingConfirmProposal.action] || 0) + 1,
-      }));
-
-      setAuditEvents((prev) =>
-        prev.map((a) =>
-          a.action_id === pendingConfirmDecision.action_id
-            ? { ...a, decision: 'ALLOW', execution_status: 'EXECUTED', reason: `Approved by human operator (${approvedBy})`, approved_by: approvedBy }
-            : a
-        )
-      );
-
-      // Trigger actual execution on TechFlow/n8n database layer
       try {
-        console.log('🛡️ [TRIPWIRE FRONTEND] Admin Approved Action:', {
-          action_id: pendingConfirmDecision.action_id,
-          proposal: pendingConfirmProposal,
-          approved_by: approvedBy
-        });
-
-        const execRes = await fetch('http://localhost:4000/api/agent/execute-confirmed', {
+        await fetch('http://localhost:4000/api/agent/execute-confirmed', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action_id: pendingConfirmDecision.action_id,
             proposal: pendingConfirmProposal,
-            approved_by: approvedBy
-          })
+            approved_by: approvedBy,
+          }),
         });
-
-        const execData = await execRes.json();
-        console.log('🛡️ [TRIPWIRE FRONTEND] TechFlow Gateway Response:', execData);
       } catch (execErr) {
-        console.warn('❌ Failed to forward confirmed execution to TechFlow backend:', execErr);
+        console.warn('Failed to forward confirmed execution to TechFlow backend:', execErr);
       }
-    } else {
-      setAuditEvents((prev) =>
-        prev.map((a) =>
-          a.action_id === pendingConfirmDecision.action_id
-            ? { ...a, decision: 'BLOCK', execution_status: 'NOT_EXECUTED', reason: `Denied by backend re-validation after human approval (${approvedBy})`, approved_by: approvedBy }
-            : a
-        )
-      );
     }
 
-    if (pendingConfirmDecision) {
-      sethandledModalActionIds((prev) => new Set([...prev, pendingConfirmDecision.action_id]));
-    }
+    setHandledModalActionIds((prev) => new Set([...prev, pendingConfirmDecision.action_id]));
     setPendingConfirmDecision(null);
     setPendingConfirmProposal(null);
-
-    // Try to sync with authoritative backend data
-    if (backendOnline) {
-      const traj = await defaultTripwireClient.getTrajectory(sessionId);
-      if (traj && traj.events) {
-        setEvents(traj.events);
-      }
-      const audit = await defaultTripwireClient.getAudit(sessionId);
-      if (audit && audit.events) {
-        setAuditEvents(audit.events);
-      }
-    }
+    fetchAllAuditLogs();
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
       {/* Top Header */}
-      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur px-6 py-4 flex items-center justify-between sticky top-0 z-40">
-        <div className="flex items-center space-x-3">
-          <div className="p-2.5 bg-indigo-500/20 border border-indigo-500/40 rounded-xl text-indigo-400">
+      <header className="border-b border-slate-200 bg-white px-6 py-4 flex items-center justify-between sticky top-0 z-40 shadow-xs">
+        <div className="flex items-center space-x-3.5">
+          <div className="p-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-700">
             <Shield className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center space-x-2">
-              <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-400 via-sky-300 to-emerald-400 bg-clip-text text-transparent">
+            <div className="flex items-center space-x-2.5">
+              <h1 className="text-xl font-bold tracking-tight text-slate-900">
                 TRIPWIRE
               </h1>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-700/50 font-mono font-bold tracking-wider">
+              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono font-bold tracking-wider">
                 RUNTIME SECURITY HARNESS
               </span>
             </div>
-            <p className="text-xs text-slate-400">Model-Agnostic AI Agent Authorization, Reversibility &amp; Trajectory Middleware</p>
+            <p className="text-xs text-slate-500">
+              Model-Agnostic AI Agent Authorization, Reversibility &amp; Trajectory Middleware
+            </p>
           </div>
         </div>
 
-        {/* Indicators & Session Selector */}
+        {/* Status Badges */}
         <div className="flex items-center space-x-3 text-xs">
-          <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">
-            <span className={`w-2 h-2 rounded-full ${backendOnline ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`}></span>
-            <span className="text-slate-400">Harness Engine:</span>
-            <span className={`font-semibold ${backendOnline ? 'text-emerald-300' : 'text-amber-300'}`}>
+          <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
+            <span
+              className={`w-2 h-2 rounded-full ${backendOnline ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}
+            ></span>
+            <span className="text-slate-500 font-medium">Harness Engine:</span>
+            <span className={`font-bold ${backendOnline ? 'text-emerald-700' : 'text-amber-700'}`}>
               {backendOnline ? 'FastAPI Connected' : 'Simulated Harness'}
             </span>
-          </div>
-
-          <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">
-            <span className="text-slate-400">Active Session:</span>
-            {availableSessions.length > 0 ? (
-              <select
-                value={sessionId}
-                onChange={(e) => {
-                  setSessionId(e.target.value);
-                  setAutoSyncSession(false);
-                }}
-                className="bg-slate-950 text-indigo-300 font-mono font-bold text-xs border border-indigo-900/60 rounded px-2 py-0.5 focus:outline-none focus:border-indigo-500 cursor-pointer"
-              >
-                {availableSessions.map((s) => (
-                  <option key={s.session_id} value={s.session_id} className="bg-slate-900 text-slate-200">
-                    {s.session_id} {s.principal_id ? `(${s.principal_id})` : ''}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="font-mono text-indigo-300 font-bold">{sessionId}</span>
-            )}
-            <button
-              onClick={() => setAutoSyncSession((prev) => !prev)}
-              title={autoSyncSession ? 'Click to lock to current session' : 'Click to enable live auto-sync to newest session'}
-              className={`ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded border transition ${
-                autoSyncSession
-                  ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60 animate-pulse'
-                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
-              }`}
-            >
-              {autoSyncSession ? '⚡ LIVE AUTO-SYNC' : 'MANUAL'}
-            </button>
           </div>
         </div>
       </header>
 
       {/* Navigation Subheader */}
-      <div className="border-b border-slate-800 bg-slate-900/40 px-6 overflow-x-auto">
-        <div className="flex space-x-6 min-w-max">
+      <div className="border-b border-slate-200 bg-white px-6 overflow-x-auto shadow-xs">
+        <div className="flex space-x-8 min-w-max">
           <button
             onClick={() => setActiveTab('dashboard')}
-            className={`py-3 text-xs font-semibold border-b-2 flex items-center space-x-2 transition cursor-pointer ${
+            className={`py-3.5 text-xs font-bold border-b-2 flex items-center space-x-2 transition cursor-pointer ${
               activeTab === 'dashboard'
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <Activity className="w-4 h-4" />
             <span>Overview &amp; Trajectory Monitor</span>
           </button>
           <button
-            onClick={() => setActiveTab('scenarios')}
-            className={`py-3 text-xs font-semibold border-b-2 flex items-center space-x-2 transition cursor-pointer ${
-              activeTab === 'scenarios'
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Play className="w-4 h-4" />
-            <span>Interactive Scenario Runner</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('sandbox')}
-            className={`py-3 text-xs font-semibold border-b-2 flex items-center space-x-2 transition cursor-pointer ${
-              activeTab === 'sandbox'
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>Custom Action Sandbox</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('audit')}
-            className={`py-3 text-xs font-semibold border-b-2 flex items-center space-x-2 transition cursor-pointer ${
+            onClick={() => {
+              setActiveTab('audit');
+              fetchAllAuditLogs();
+            }}
+            className={`py-3.5 text-xs font-bold border-b-2 flex items-center space-x-2 transition cursor-pointer ${
               activeTab === 'audit'
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <Terminal className="w-4 h-4" />
-            <span>Audit Forensics ({auditEvents.length})</span>
+            <span>Audit Forensics ({allDbAuditEvents.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('tools')}
-            className={`py-3 text-xs font-semibold border-b-2 flex items-center space-x-2 transition cursor-pointer ${
+            className={`py-3.5 text-xs font-bold border-b-2 flex items-center space-x-2 transition cursor-pointer ${
               activeTab === 'tools'
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <Lock className="w-4 h-4" />
@@ -467,130 +357,176 @@ export default function App() {
           </button>
           <button
             onClick={() => setActiveTab('architecture')}
-            className={`py-3 text-xs font-semibold border-b-2 flex items-center space-x-2 transition cursor-pointer ${
+            className={`py-3.5 text-xs font-bold border-b-2 flex items-center space-x-2 transition cursor-pointer ${
               activeTab === 'architecture'
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <Layers className="w-4 h-4" />
             <span>Architecture &amp; Decision Matrix</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('scenarios')}
+            className={`py-3.5 text-xs font-bold border-b-2 flex items-center space-x-2 transition cursor-pointer ${
+              activeTab === 'scenarios'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Play className="w-4 h-4" />
+            <span>Interactive Scenario Runner</span>
           </button>
         </div>
       </div>
 
       {/* Main View Area */}
       <main className="flex-1 p-6 max-w-7xl mx-auto w-full">
+        {/* ========================================================================= */}
+        {/* TAB 1: OVERVIEW & TRAJECTORY MONITOR (Dynamic TECHFLOW Data Only)         */}
+        {/* ========================================================================= */}
         {activeTab === 'dashboard' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
+          <div className="space-y-6">
+            {/* Session Changer Control Bar (Moved here as requested in Item 5) */}
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-indigo-50 text-indigo-700 rounded-lg border border-indigo-100">
+                  <Cpu className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                    TechFlow Dynamic Session Stream
+                  </h3>
+                  <div className="flex items-center space-x-2 mt-0.5 text-xs text-slate-500">
+                    <UserCheck className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Principal: <strong className="text-slate-700 font-mono">{principalId}</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-3 text-xs">
+                <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
+                  <span className="text-slate-500 font-semibold">Active Session:</span>
+                  {availableSessions.length > 0 ? (
+                    <select
+                      value={sessionId}
+                      onChange={(e) => {
+                        setSessionId(e.target.value);
+                        setAutoSyncSession(false);
+                      }}
+                      className="bg-white text-indigo-700 font-mono font-bold text-xs border border-slate-300 rounded px-2 py-0.5 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs"
+                    >
+                      {availableSessions.map((s) => (
+                        <option key={s.session_id} value={s.session_id} className="text-slate-800">
+                          {s.session_id} {s.principal_id ? `(${s.principal_id})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="font-mono text-indigo-700 font-bold">{sessionId}</span>
+                  )}
+                  <button
+                    onClick={() => setAutoSyncSession((prev) => !prev)}
+                    title={
+                      autoSyncSession
+                        ? 'Click to lock to current session'
+                        : 'Click to enable live auto-sync to newest session'
+                    }
+                    className={`ml-1 px-2 py-0.5 text-[10px] font-bold rounded border transition cursor-pointer ${
+                      autoSyncSession
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                        : 'bg-white text-slate-600 border-slate-300 hover:text-slate-900'
+                    }`}
+                  >
+                    {autoSyncSession ? '⚡ LIVE AUTO-SYNC' : 'MANUAL'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Behavioral Trajectory Monitor & Action Timeline ALONE */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <TrajectoryChart
                 events={events}
                 currentScore={currentScore}
                 currentRiskBand={currentRiskBand}
-                selectedEvent={selectedEvent}
-                onSelectEvent={(evt) => setSelectedEvent(evt)}
+                title="Behavioral Trajectory Monitor"
+                subtitle="Live dynamic TechFlow score progression & EMA risk evaluation"
               />
+
               <ActionTimeline
                 events={events}
-                onSelectEvent={(evt) => setSelectedEvent(evt)}
-              />
-            </div>
-
-            <div className="space-y-6">
-              <DecisionCard
-                currentProposal={currentProposal}
-                currentDecision={currentDecision}
-                onRequestConfirm={() => setIsConfirmModalOpen(true)}
-              />
-              <ScenarioRunner
-                isRunning={false}
-                onRunStep={handleStepAction}
-                onReset={handleReset}
-                toolExecutionCounts={toolExecutionCounts}
+                title="Action Timeline"
+                subtitle="Live sequence of intercepted TechFlow actions & evaluations"
               />
             </div>
           </div>
         )}
 
-        {activeTab === 'scenarios' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 space-y-6">
-              <ScenarioRunner
-                isRunning={false}
-                onRunStep={handleStepAction}
-                onReset={handleReset}
-                toolExecutionCounts={toolExecutionCounts}
-              />
-              <ToolRegistryView executionCounts={toolExecutionCounts} />
-            </div>
-
-            <div className="lg:col-span-2 space-y-6">
-              <TrajectoryChart
-                events={events}
-                currentScore={currentScore}
-                currentRiskBand={currentRiskBand}
-                selectedEvent={selectedEvent}
-                onSelectEvent={(evt) => setSelectedEvent(evt)}
-              />
-              <DecisionCard
-                currentProposal={currentProposal}
-                currentDecision={currentDecision}
-                onRequestConfirm={() => setIsConfirmModalOpen(true)}
-              />
-              <ActionTimeline
-                events={events}
-                onSelectEvent={(evt) => setSelectedEvent(evt)}
-              />
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'sandbox' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 space-y-6">
-              <CustomActionSandbox
-                onPropose={handleDispatchProposal}
-                currentSessionId={sessionId}
-              />
-              <ToolRegistryView executionCounts={toolExecutionCounts} />
-            </div>
-
-            <div className="lg:col-span-2 space-y-6">
-              <TrajectoryChart
-                events={events}
-                currentScore={currentScore}
-                currentRiskBand={currentRiskBand}
-                selectedEvent={selectedEvent}
-                onSelectEvent={(evt) => setSelectedEvent(evt)}
-              />
-              <DecisionCard
-                currentProposal={currentProposal}
-                currentDecision={currentDecision}
-                onRequestConfirm={() => setIsConfirmModalOpen(true)}
-              />
-              <ActionTimeline
-                events={events}
-                onSelectEvent={(evt) => setSelectedEvent(evt)}
-              />
-            </div>
-          </div>
-        )}
-
+        {/* ========================================================================= */}
+        {/* TAB 2: AUDIT FORENSICS (All Database Logs)                                 */}
+        {/* ========================================================================= */}
         {activeTab === 'audit' && (
           <div className="space-y-6">
-            <AuditTable auditEvents={auditEvents} />
+            <AuditTable
+              auditEvents={allDbAuditEvents}
+              onRefresh={fetchAllAuditLogs}
+              isLoading={isAuditLoading}
+            />
           </div>
         )}
 
+        {/* ========================================================================= */}
+        {/* TAB 3: PROTECTED TOOLS & INVARIANTS                                      */}
+        {/* ========================================================================= */}
         {activeTab === 'tools' && (
-          <div className="max-w-3xl mx-auto space-y-6">
-            <ToolRegistryView executionCounts={toolExecutionCounts} />
+          <div className="max-w-4xl mx-auto space-y-6">
+            <ToolRegistryView executionCounts={scenarioToolCounts} />
           </div>
         )}
 
-        {activeTab === 'architecture' && (
-          <ArchitectureView />
+        {/* ========================================================================= */}
+        {/* TAB 4: ARCHITECTURE & DECISION MATRIX                                     */}
+        {/* ========================================================================= */}
+        {activeTab === 'architecture' && <ArchitectureView />}
+
+        {/* ========================================================================= */}
+        {/* TAB 5: INTERACTIVE SCENARIO RUNNER (Predefined Scenarios Only - LAST TAB) */}
+        {/* ========================================================================= */}
+        {activeTab === 'scenarios' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Left Column: Predefined Scenario Demonstrator */}
+              <div className="lg:col-span-5 space-y-6">
+                <ScenarioRunner
+                  isRunning={false}
+                  onRunStep={handleScenarioStepAction}
+                  onReset={handleScenarioReset}
+                  toolExecutionCounts={scenarioToolCounts}
+                />
+              </div>
+
+              {/* Right Column: Dedicated Scenario Trajectory Chart & Timeline */}
+              <div className="lg:col-span-7 space-y-6">
+                <TrajectoryChart
+                  events={scenarioEvents}
+                  currentScore={scenarioScore}
+                  currentRiskBand={scenarioRiskBand}
+                  selectedEvent={scenarioSelectedEvent}
+                  onSelectEvent={(evt) => setScenarioSelectedEvent(evt)}
+                  title="Scenario Trajectory Monitor"
+                  subtitle="Isolated trajectory curve for current predefined test vector"
+                />
+
+                <ActionTimeline
+                  events={scenarioEvents}
+                  onSelectEvent={(evt) => setScenarioSelectedEvent(evt)}
+                  title="Scenario Action Timeline"
+                  subtitle="Step-by-step audit trail for the selected predefined test run"
+                />
+              </div>
+            </div>
+          </div>
         )}
       </main>
 
@@ -605,3 +541,4 @@ export default function App() {
     </div>
   );
 }
+

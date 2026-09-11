@@ -197,6 +197,21 @@ export class TripwireClient {
   }
 
   /**
+   * GET /api/v1/audit - Fetch all audit logs across all sessions in database
+   */
+  async getAllAudit(): Promise<{ session_id: string; events: AuditEvent[] } | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/audit`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn('Backend all-audit fetch error', e);
+    }
+    return null;
+  }
+
+  /**
    * GET /api/v1/sessions
    */
   async listSessions(): Promise<Array<{
