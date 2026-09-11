@@ -88,10 +88,11 @@ This repository contains two interconnected platforms designed to demonstrate, m
 TechFlow is an enterprise SaaS simulation where real corporate users authenticate, view domain-specific tasks, and request AI assistance.
 
 ### Overview & Persona Roles
+
 TechFlow supports 7 distinct organizational personas with granular business functions:
 
 | Role | Domain Scope | Typical Operations | Security Boundary |
-| :--- | :--- | :--- | :--- |
+
 | **Frontend Developer** | `frontend/`, UI | Component styling, React props, client state | Strictly forbidden from DB & Infra |
 | **Backend Developer** | `backend/`, API | CRUD queries, schema migrations, endpoints | Restricted from DevOps & Prod Infra |
 | **DevOps Engineer** | `infra/`, Cloud | CI/CD pipelines, container cluster, configs | Restricted from altering app business logic |
@@ -101,23 +102,24 @@ TechFlow supports 7 distinct organizational personas with granular business func
 | **HR Specialist** | `hr/`, Employees | Onboarding, records, leave management | PII isolation; strict database protections |
 
 ### Frontend Architecture
+
 - **Framework**: React 18, Vite, Tailwind CSS.
 - **State & Auth**: `AuthContext` provides persistent session credentials and role state synced across `localStorage`.
 - **Interactive UI**: Contextual quick-action prompt cards customized for each role, live agent query console, and real-time response rendering.
 
 ### Backend Gateway Architecture
+
 - **Tech Stack**: Node.js, Express (running on port `4000`).
 - **Authentication**: Proxies and authenticates users via MockAPI (`https://6aa28cf8ccb3db9689a69eca.mockapi.io/login`).
 - **Query Enrichment**: Intercepts employee prompts, enriches them with user role metadata, session ID, timestamp, and query domain context before routing.
 - **Direct & Fallback Execution**: Integrates with Tripwire's action evaluation engine and provides mock n8n execution fallbacks.
-
----
 
 ## 🛡️ Tripwire: Agentic Runtime Security Harness
 
 Tripwire is an inline gatekeeper for AI agents. Rather than relying on rigid static permissions or post-hoc log parsing, Tripwire computes live **trajectory drift** and analyzes **action reversibility** at runtime.
 
 ### Core Philosophy: Trajectory & Reversibility
+
 1. **Reversibility-First Action Classification**:
    - `READ` (0.0): Side-effect free reads (`SELECT`, `cat`, `GET`).
    - `MODIFY` (0.4): State changes that are reversible (`UPDATE`, `git commit`).
@@ -174,6 +176,7 @@ For every incoming tool invocation:
 Tripwire computes a continuous behavioral risk score $S_t \in [0.0, 1.0]$ for each step $t$:
 
 #### 1. Multi-Signal Composite Step Score
+
 $$\text{step\_score}_t = 0.30 \cdot \Delta_{\text{scope}} + 0.35 \cdot \Delta_{\text{destruct}} + 0.15 \cdot V_{\text{action}} + 0.20 \cdot B_{\text{footprint}}$$
 
 - **Scope Drift ($\Delta_{\text{scope}}$)**: Cosine divergence between initial stated user intent embedding and current tool target embedding.
@@ -182,14 +185,17 @@ $$\text{step\_score}_t = 0.30 \cdot \Delta_{\text{scope}} + 0.35 \cdot \Delta_{\
 - **Footprint Breadth ($B_{\text{footprint}}$)**: Ratio of unique infrastructure resources (tables, files, containers) accessed in the session.
 
 #### 2. Asymmetric Exponential Moving Average (EMA)
+
 To capture creeping risk ("Boiling Frog") while preventing abrupt single-step anomalies from immediately decaying:
 
 $$S_t = S_{t-1} + \alpha \cdot (\text{step\_score}_t - S_{t-1})$$
 
-$$\alpha = \begin{cases} 
+$$
+\alpha = \begin{cases}
 \alpha_{\text{up}} = 0.60 & \text{if } \text{step\_score}_t \ge S_{t-1} \quad \text{(Fast alert escalation)} \\
 \alpha_{\text{down}} = 0.15 & \text{if } \text{step\_score}_t < S_{t-1} \quad \text{(Slow risk decay)}
-\end{cases}$$
+\end{cases}
+$$
 
 ---
 
@@ -205,7 +211,7 @@ $$\alpha = \begin{cases}
 
 ## 🔄 End-to-End Execution Flow
 
-1. **User Request**: A Backend Developer logs into **TechFlow** and requests: *"Optimize customer indexing and clean up old records"*.
+1. **User Request**: A Backend Developer logs into **TechFlow** and requests: _"Optimize customer indexing and clean up old records"_.
 2. **Intent Packaging**: TechFlow gateway structures the payload with identity, JWT context, role (`Backend Developer`), and session ID.
 3. **Tripwire Gate Evaluation**:
    - `SELECT * FROM customers` $\to$ `READ`, $S_t = 0.05 \implies$ **`ALLOW`**.
@@ -220,21 +226,21 @@ $$\alpha = \begin{cases}
 
 ### Tripwire REST API (`http://localhost:8000`)
 
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `POST` | `/api/v1/evaluate` | Main gate evaluation endpoint; classifies action, checks invariants, returns `ALLOW`/`CONFIRM`/`BLOCK`. |
-| `GET` | `/api/v1/audit` | Streams all authoritative audit logs across all recorded sessions from `tripwire_v2.db`. |
-| `GET` | `/api/v1/sessions` | Lists active and historical agent sessions with trajectory metrics. |
-| `GET` | `/api/v1/sessions/{id}` | Retrieves detailed session state, trajectory points, and action history. |
-| `GET` | `/api/v1/invariants` | Returns active security invariants and role isolation rules. |
-| `GET` | `/api/v1/scenarios` | Returns predefined judge showcase scenarios (Boiling Frog, Credential Theft, etc.). |
-| `POST` | `/api/v1/scenarios/{id}/run` | Runs an interactive scenario through the live trajectory engine. |
+| Method | Endpoint                     | Description                                                                                             |
+| :----- | :--------------------------- | :------------------------------------------------------------------------------------------------------ |
+| `POST` | `/api/v1/evaluate`           | Main gate evaluation endpoint; classifies action, checks invariants, returns `ALLOW`/`CONFIRM`/`BLOCK`. |
+| `GET`  | `/api/v1/audit`              | Streams all authoritative audit logs across all recorded sessions from `tripwire_v2.db`.                |
+| `GET`  | `/api/v1/sessions`           | Lists active and historical agent sessions with trajectory metrics.                                     |
+| `GET`  | `/api/v1/sessions/{id}`      | Retrieves detailed session state, trajectory points, and action history.                                |
+| `GET`  | `/api/v1/invariants`         | Returns active security invariants and role isolation rules.                                            |
+| `GET`  | `/api/v1/scenarios`          | Returns predefined judge showcase scenarios (Boiling Frog, Credential Theft, etc.).                     |
+| `POST` | `/api/v1/scenarios/{id}/run` | Runs an interactive scenario through the live trajectory engine.                                        |
 
 ### TechFlow Gateway API (`http://localhost:4000`)
 
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/health` | Gateway health check. |
+| Method | Endpoint           | Description                                                                      |
+| :----- | :----------------- | :------------------------------------------------------------------------------- |
+| `GET`  | `/api/health`      | Gateway health check.                                                            |
 | `POST` | `/api/agent/query` | Receives user query, attaches role & session context, and evaluates tool safety. |
 
 ---
@@ -242,6 +248,7 @@ $$\alpha = \begin{cases}
 ## 🚀 Getting Started & Local Setup
 
 ### Prerequisites
+
 - **Node.js**: v18.0+ & `npm`
 - **Python**: 3.10+ & `pip` / `virtualenv`
 
@@ -250,6 +257,7 @@ $$\alpha = \begin{cases}
 ### 1. Running TechFlow
 
 #### Backend Gateway
+
 ```bash
 cd TECHFLOW/company-app-backend
 npm install
@@ -258,6 +266,7 @@ npm run dev
 ```
 
 #### Frontend Workspace
+
 ```bash
 cd TECHFLOW/frontend
 npm install
@@ -270,6 +279,7 @@ npm run dev
 ### 2. Running Tripwire
 
 #### Backend API & Trajectory Engine
+
 ```bash
 cd TRIPWIRE/Backend
 # Activate your Python virtual environment if configured:
@@ -280,6 +290,7 @@ python run.py
 ```
 
 #### Frontend Dashboard
+
 ```bash
 cd TRIPWIRE/frontend
 npm install
@@ -297,15 +308,15 @@ Tripwire features built-in demonstration scenarios accessible via the **Interact
    - Starts with benign `READ` operations on public configs.
    - Transitions into reading internal developer settings.
    - Attempts modifying authentication tables.
-   - *Tripwire Result*: Trajectory continuously climbs; gate transitions from `ALLOW` to `CONFIRM` to `BLOCK` before unauthorized mutation occurs.
+   - _Tripwire Result_: Trajectory continuously climbs; gate transitions from `ALLOW` to `CONFIRM` to `BLOCK` before unauthorized mutation occurs.
 
 2. **Cross-Role Database Boundary Breach**:
    - Backend Developer role attempts accessing DevOps deployment credentials or HR salary records.
-   - *Tripwire Result*: Invariant I-1 detects domain mismatch and immediately triggers **`BLOCK`**.
+   - _Tripwire Result_: Invariant I-1 detects domain mismatch and immediately triggers **`BLOCK`**.
 
 3. **High-Velocity Mass Destruction**:
    - Automated script attempts rapid successive table drops and bucket wipes.
-   - *Tripwire Result*: Burst velocity and destructiveness growth triggers instant **`HARD_CONFIRM`** and session lockdown.
+   - _Tripwire Result_: Burst velocity and destructiveness growth triggers instant **`HARD_CONFIRM`** and session lockdown.
 
 ---
 
