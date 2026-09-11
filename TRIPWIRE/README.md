@@ -96,7 +96,7 @@ $$\text{step\_score} = 0.30 \cdot \text{scope\_drift} + 0.35 \cdot \text{destruc
 
 ### Prerequisites
 - Python 3.11+
-- Poetry
+
 
 ### 1. Install Dependencies
 ```bash

@@ -1,4 +1,4 @@
-# TechFlow Company App (Tripwire Hackathon Simulation Layer)
+# TechFlow App (Tripwire Hackathon Simulation Layer)
 
 This is the lightweight software company application and application gateway built for the **TRIPWIRE** hackathon project.
 
