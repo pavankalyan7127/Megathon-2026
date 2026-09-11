@@ -287,13 +287,7 @@ export async function executeConfirmedAction({ action_id, proposal, approved_by 
     targetedInstruction = `Execute ${actionName} on ${resourceName}.`;
   }
 
-  console.log('\n======================================================================');
-  console.log('⚡ [ADMIN HITL APPROVED] Dispatching execution to n8n Webhook');
-  console.log('📋 Action ID:', action_id);
-  console.log('👤 Approved By:', approved_by);
-  console.log('🎯 Target Action:', actionName);
-  console.log('📝 Instruction:', targetedInstruction);
-  console.log('======================================================================\n');
+  // removed the console log 
 
   const result = await dispatchToN8N({
     user: {
@@ -310,3 +304,4 @@ export async function executeConfirmedAction({ action_id, proposal, approved_by 
 
   return result;
 }
+
